@@ -1,0 +1,550 @@
+package com.example.skillforge.service;
+
+import com.example.skillforge.dto.response.OverallDashboardResponse;
+import com.example.skillforge.model.entity.*;
+import com.example.skillforge.repository.*;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.*;
+import java.util.stream.Collectors;
+
+/**
+ * Service for comprehensive dashboard statistics
+ * Combines data from courses, quizzes, topics, and materials
+ */
+@Service
+@RequiredArgsConstructor
+public class DashboardStatisticsService {
+
+    private final EnrollmentRepository enrollmentRepository;
+    private final CourseRepository courseRepository;
+    private final QuizAttemptRepository quizAttemptRepository;
+    private final QuizRepository quizRepository;
+    private final QuestionRepository questionRepository;
+    private final TopicProgressRepository topicProgressRepository;
+    private final TopicRepository topicRepository;
+    private final TopicMaterialProgressRepository materialProgressRepository;
+    private final MaterialRepository materialRepository;
+    private final CourseProgressRepository courseProgressRepository;
+
+    /**
+     * Get comprehensive dashboard statistics for a student
+     */
+    public OverallDashboardResponse getOverallDashboardStatistics(Long studentId) {
+        // Get all enrolled courses
+        List<Enrollment> enrollments = enrollmentRepository.findByStudentId(studentId);
+        List<Long> courseIds = enrollments.stream()
+                .map(Enrollment::getCourseId)
+                .collect(Collectors.toList());
+
+        // Build comprehensive response
+        return OverallDashboardResponse.builder()
+                .totalCoursesEnrolled(enrollments.size())
+                .coursesCompleted((int) enrollments.stream().filter(Enrollment::getIsCompleted).count())
+                .coursesInProgress((int) enrollments.stream().filter(e -> !e.getIsCompleted()).count())
+                .averageCourseCompletion(calculateAverageCourseCompletion(studentId, courseIds))
+                .quizMetrics(buildQuizMetrics(studentId, courseIds))
+                .topicMetrics(buildTopicMetrics(studentId, courseIds))
+                .materialMetrics(buildMaterialMetrics(studentId, courseIds))
+                .timeMetrics(buildTimeMetrics(studentId, courseIds))
+                .performanceOverview(buildPerformanceOverview(studentId, courseIds))
+                .recentActivities(buildRecentActivities(studentId, courseIds))
+                .streakInfo(buildStreakInfo(studentId))
+                .badges(buildBadges(studentId))
+                .coursePerformances(buildCoursePerformances(studentId, courseIds))
+                .build();
+    }
+
+    private Double calculateAverageCourseCompletion(Long studentId, List<Long> courseIds) {
+        if (courseIds.isEmpty()) return 0.0;
+
+        List<CourseProgress> progressList = courseProgressRepository.findByStudentId(studentId);
+        if (progressList.isEmpty()) return 0.0;
+
+        double totalCompletion = progressList.stream()
+                .mapToDouble(cp -> cp.getProgressPercent() != null ? cp.getProgressPercent() : 0.0)
+                .sum();
+
+        return Math.round(totalCompletion / progressList.size() * 100.0) / 100.0;
+    }
+
+    private OverallDashboardResponse.QuizMetrics buildQuizMetrics(Long studentId, List<Long> courseIds) {
+        if (courseIds.isEmpty()) {
+            return OverallDashboardResponse.QuizMetrics.builder()
+                    .totalQuizzesTaken(0)
+                    .totalQuizzesAvailable(0)
+                    .averageScore(0.0)
+                    .accuracyRate(0.0)
+                    .totalQuestionsAnswered(0)
+                    .totalCorrectAnswers(0)
+                    .highestScore(0)
+                    .lowestScore(0)
+                    .performanceLevel("NOT_STARTED")
+                    .isImproving(false)
+                    .improvementRate(0.0)
+                    .build();
+        }
+
+        // Get all quiz attempts for this student
+        List<QuizAttempt> attempts = new ArrayList<>();
+        for (Long courseId : courseIds) {
+            attempts.addAll(quizAttemptRepository.findByStudentIdAndCourseId(studentId, courseId));
+        }
+
+        if (attempts.isEmpty()) {
+            int totalQuizzes = 0;
+            for (Long courseId : courseIds) {
+                totalQuizzes += quizRepository.findByCourseId(courseId).size();
+            }
+
+            return OverallDashboardResponse.QuizMetrics.builder()
+                    .totalQuizzesTaken(0)
+                    .totalQuizzesAvailable(totalQuizzes)
+                    .averageScore(0.0)
+                    .accuracyRate(0.0)
+                    .totalQuestionsAnswered(0)
+                    .totalCorrectAnswers(0)
+                    .highestScore(0)
+                    .lowestScore(0)
+                    .performanceLevel("NOT_STARTED")
+                    .isImproving(false)
+                    .improvementRate(0.0)
+                    .build();
+        }
+
+        // Calculate metrics
+        double averageScore = attempts.stream()
+                .mapToDouble(QuizAttempt::getScore)
+                .average()
+                .orElse(0.0);
+
+        int highestScore = attempts.stream()
+                .mapToInt(QuizAttempt::getScore)
+                .max()
+                .orElse(0);
+
+        int lowestScore = attempts.stream()
+                .mapToInt(QuizAttempt::getScore)
+                .min()
+                .orElse(0);
+
+        // Calculate accuracy
+        int totalCorrect = 0;
+        int totalQuestions = 0;
+        for (QuizAttempt attempt : attempts) {
+            Quiz quiz = quizRepository.findById(attempt.getQuiz().getId()).orElse(null);
+            if (quiz != null) {
+                int questionCount = questionRepository.countByQuizId(quiz.getId());
+                totalQuestions += questionCount;
+                totalCorrect += Math.round((attempt.getScore() / 100.0f) * questionCount);
+            }
+        }
+
+        double accuracyRate = totalQuestions > 0 
+                ? Math.round((totalCorrect * 100.0 / totalQuestions) * 100.0) / 100.0
+                : 0.0;
+
+        // Determine performance level
+        String performanceLevel = determinePerformanceLevel(averageScore);
+
+        // Calculate improvement trend
+        boolean isImproving = false;
+        double improvementRate = 0.0;
+        if (attempts.size() >= 4) {
+            List<QuizAttempt> sortedAttempts = attempts.stream()
+                    .sorted(Comparator.comparing(QuizAttempt::getAttemptTime))
+                    .collect(Collectors.toList());
+
+            int halfPoint = sortedAttempts.size() / 2;
+            double firstHalfAvg = sortedAttempts.subList(0, halfPoint).stream()
+                    .mapToDouble(QuizAttempt::getScore)
+                    .average()
+                    .orElse(0.0);
+            double secondHalfAvg = sortedAttempts.subList(halfPoint, sortedAttempts.size()).stream()
+                    .mapToDouble(QuizAttempt::getScore)
+                    .average()
+                    .orElse(0.0);
+
+            if (firstHalfAvg > 0) {
+                improvementRate = Math.round(((secondHalfAvg - firstHalfAvg) / firstHalfAvg) * 100.0 * 100.0) / 100.0;
+                isImproving = improvementRate > 0;
+            }
+        }
+
+        // Count available quizzes
+        int totalQuizzes = 0;
+        for (Long courseId : courseIds) {
+            totalQuizzes += quizRepository.findByCourseId(courseId).size();
+        }
+
+        return OverallDashboardResponse.QuizMetrics.builder()
+                .totalQuizzesTaken(attempts.size())
+                .totalQuizzesAvailable(totalQuizzes)
+                .averageScore(Math.round(averageScore * 100.0) / 100.0)
+                .accuracyRate(accuracyRate)
+                .totalQuestionsAnswered(totalQuestions)
+                .totalCorrectAnswers(totalCorrect)
+                .highestScore(highestScore)
+                .lowestScore(lowestScore)
+                .performanceLevel(performanceLevel)
+                .isImproving(isImproving)
+                .improvementRate(improvementRate)
+                .build();
+    }
+
+    private OverallDashboardResponse.TopicMetrics buildTopicMetrics(Long studentId, List<Long> courseIds) {
+        if (courseIds.isEmpty()) {
+            return OverallDashboardResponse.TopicMetrics.builder()
+                    .totalTopicsAvailable(0)
+                    .topicsCompleted(0)
+                    .topicsInProgress(0)
+                    .completionRate(0.0)
+                    .totalTopicsEnrolled(0)
+                    .build();
+        }
+
+        // Get all topics in enrolled courses
+        List<Topic> allTopics = new ArrayList<>();
+        for (Long courseId : courseIds) {
+            allTopics.addAll(topicRepository.findByCourseId(courseId));
+        }
+
+        // Get completed topics
+        List<TopicProgress> completedTopics = topicProgressRepository.findByStudentId(studentId).stream()
+                .filter(tp -> tp.getCompleted() != null && tp.getCompleted())
+                .collect(Collectors.toList());
+
+        // Get in-progress topics (started but not completed)
+        List<TopicProgress> inProgressTopics = topicProgressRepository.findByStudentId(studentId).stream()
+                .filter(tp -> tp.getCompleted() == null || !tp.getCompleted())
+                .collect(Collectors.toList());
+
+        double completionRate = allTopics.isEmpty() ? 0.0 
+                : Math.round((completedTopics.size() * 100.0 / allTopics.size()) * 100.0) / 100.0;
+
+        return OverallDashboardResponse.TopicMetrics.builder()
+                .totalTopicsAvailable(allTopics.size())
+                .topicsCompleted(completedTopics.size())
+                .topicsInProgress(inProgressTopics.size())
+                .completionRate(completionRate)
+                .totalTopicsEnrolled(allTopics.size())
+                .build();
+    }
+
+    private OverallDashboardResponse.MaterialMetrics buildMaterialMetrics(Long studentId, List<Long> courseIds) {
+        if (courseIds.isEmpty()) {
+            return OverallDashboardResponse.MaterialMetrics.builder()
+                    .totalMaterialsAvailable(0)
+                    .materialsCompleted(0)
+                    .completionRate(0.0)
+                    .videos(OverallDashboardResponse.VideoMetrics.builder()
+                            .totalVideos(0).videosWatched(0).completionRate(0.0).totalWatchTimeMinutes(0).build())
+                    .documents(OverallDashboardResponse.DocumentMetrics.builder()
+                            .totalDocuments(0).documentsRead(0).completionRate(0.0).build())
+                    .build();
+        }
+
+        // Get all topics in enrolled courses
+        List<Topic> allTopics = new ArrayList<>();
+        for (Long courseId : courseIds) {
+            allTopics.addAll(topicRepository.findByCourseId(courseId));
+        }
+
+        List<Long> topicIds = allTopics.stream().map(Topic::getId).collect(Collectors.toList());
+
+        // Get all materials in these topics
+        List<Material> allMaterials = new ArrayList<>();
+        for (Long topicId : topicIds) {
+            allMaterials.addAll(materialRepository.findByTopicId(topicId));
+        }
+
+        // Get completed materials
+        List<Long> materialIds = allMaterials.stream().map(Material::getId).collect(Collectors.toList());
+        List<TopicMaterialProgress> completedMaterials = materialIds.isEmpty() ? new ArrayList<>()
+                : materialProgressRepository.findByStudentIdAndMaterialIdIn(studentId, materialIds).stream()
+                        .filter(mp -> mp.getCompleted() != null && mp.getCompleted())
+                        .collect(Collectors.toList());
+
+        // Separate by type
+        List<Material> videos = allMaterials.stream()
+                .filter(m -> "VIDEO".equalsIgnoreCase(m.getType()))
+                .collect(Collectors.toList());
+
+        List<Material> documents = allMaterials.stream()
+                .filter(m -> "DOCUMENT".equalsIgnoreCase(m.getType()) || "PDF".equalsIgnoreCase(m.getType()))
+                .collect(Collectors.toList());
+
+        Set<Long> completedMaterialIds = completedMaterials.stream()
+                .map(TopicMaterialProgress::getMaterialId)
+                .collect(Collectors.toSet());
+
+        int videosWatched = (int) videos.stream()
+                .filter(v -> completedMaterialIds.contains(v.getId()))
+                .count();
+
+        int documentsRead = (int) documents.stream()
+                .filter(d -> completedMaterialIds.contains(d.getId()))
+                .count();
+
+        double videoCompletionRate = videos.isEmpty() ? 0.0
+                : Math.round((videosWatched * 100.0 / videos.size()) * 100.0) / 100.0;
+
+        double documentCompletionRate = documents.isEmpty() ? 0.0
+                : Math.round((documentsRead * 100.0 / documents.size()) * 100.0) / 100.0;
+
+        double overallCompletionRate = allMaterials.isEmpty() ? 0.0
+                : Math.round((completedMaterials.size() * 100.0 / allMaterials.size()) * 100.0) / 100.0;
+
+        return OverallDashboardResponse.MaterialMetrics.builder()
+                .totalMaterialsAvailable(allMaterials.size())
+                .materialsCompleted(completedMaterials.size())
+                .completionRate(overallCompletionRate)
+                .videos(OverallDashboardResponse.VideoMetrics.builder()
+                        .totalVideos(videos.size())
+                        .videosWatched(videosWatched)
+                        .completionRate(videoCompletionRate)
+                        .totalWatchTimeMinutes(0) // Could be calculated from video duration if available
+                        .build())
+                .documents(OverallDashboardResponse.DocumentMetrics.builder()
+                        .totalDocuments(documents.size())
+                        .documentsRead(documentsRead)
+                        .completionRate(documentCompletionRate)
+                        .build())
+                .build();
+    }
+
+    private OverallDashboardResponse.TimeMetrics buildTimeMetrics(Long studentId, List<Long> courseIds) {
+        List<CourseProgress> progressList = courseProgressRepository.findByStudentId(studentId);
+        
+        int totalLearningTime = progressList.stream()
+                .mapToInt(cp -> cp.getTotalTimeMinutes() != null ? cp.getTotalTimeMinutes() : 0)
+                .sum();
+
+        // Quiz time
+        List<QuizAttempt> attempts = new ArrayList<>();
+        for (Long courseId : courseIds) {
+            attempts.addAll(quizAttemptRepository.findByStudentIdAndCourseId(studentId, courseId));
+        }
+
+        int totalQuizTime = attempts.stream()
+                .mapToInt(qa -> qa.getTimeSpent() != null ? qa.getTimeSpent() : 0)
+                .sum();
+
+        // This week and today - would need more detailed tracking
+        // For now, using approximations
+        int averageSession = progressList.isEmpty() ? 0 : totalLearningTime / Math.max(1, progressList.size());
+
+        return OverallDashboardResponse.TimeMetrics.builder()
+                .totalLearningTimeMinutes(totalLearningTime)
+                .averageSessionTimeMinutes(averageSession)
+                .totalQuizTimeMinutes(totalQuizTime)
+                .thisWeekTimeMinutes(0) // Would need timestamp tracking
+                .todayTimeMinutes(0) // Would need timestamp tracking
+                .build();
+    }
+
+    private OverallDashboardResponse.PerformanceOverview buildPerformanceOverview(Long studentId, List<Long> courseIds) {
+        List<CourseProgress> progressList = courseProgressRepository.findByStudentId(studentId);
+        
+        // Calculate overall skill score
+        int overallSkillScore = progressList.stream()
+                .mapToInt(cp -> cp.getSkillScore() != null ? cp.getSkillScore() : 50)
+                .sum();
+        
+        overallSkillScore = progressList.isEmpty() ? 0 : overallSkillScore / progressList.size();
+
+        // Determine skill level
+        String skillLevel = determineSkillLevel(overallSkillScore);
+
+        // Calculate overall progress
+        double overallProgress = calculateAverageCourseCompletion(studentId, courseIds);
+
+        // Determine strongest area and needs improvement
+        // This is a simplified version - could be more sophisticated
+        String strongestArea = "TOPICS";
+        String needsImprovement = "QUIZZES";
+
+        return OverallDashboardResponse.PerformanceOverview.builder()
+                .overallSkillScore(overallSkillScore)
+                .skillLevel(skillLevel)
+                .strongestArea(strongestArea)
+                .needsImprovement(needsImprovement)
+                .overallProgress(overallProgress)
+                .build();
+    }
+
+    private List<OverallDashboardResponse.RecentActivityItem> buildRecentActivities(Long studentId, List<Long> courseIds) {
+        List<OverallDashboardResponse.RecentActivityItem> activities = new ArrayList<>();
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("MMM dd, yyyy HH:mm");
+
+        // Get recent quiz attempts
+        List<QuizAttempt> recentAttempts = quizAttemptRepository.findRecentAttemptsByStudentId(studentId);
+        for (QuizAttempt attempt : recentAttempts.subList(0, Math.min(5, recentAttempts.size()))) {
+            Quiz quiz = attempt.getQuiz();
+            String courseName = quiz.getTopic() != null && quiz.getTopic().getCourse() != null 
+                    ? quiz.getTopic().getCourse().getTitle() 
+                    : "Unknown Course";
+
+            activities.add(OverallDashboardResponse.RecentActivityItem.builder()
+                    .activityType("QUIZ_COMPLETED")
+                    .title(quiz.getTitle())
+                    .courseName(courseName)
+                    .timestamp(attempt.getAttemptTime().format(formatter))
+                    .score(attempt.getScore() + "%")
+                    .details("Scored " + attempt.getScore() + "% in " + attempt.getTimeSpent() + " seconds")
+                    .build());
+        }
+
+        // Get recent topic completions
+        List<TopicProgress> recentTopics = topicProgressRepository.findByStudentId(studentId).stream()
+                .filter(tp -> tp.getCompleted() != null && tp.getCompleted() && tp.getCompletedAt() != null)
+                .sorted(Comparator.comparing(TopicProgress::getCompletedAt).reversed())
+                .limit(5)
+                .collect(Collectors.toList());
+
+        for (TopicProgress tp : recentTopics) {
+            Topic topic = topicRepository.findById(tp.getTopicId()).orElse(null);
+            if (topic != null) {
+                String courseName = topic.getCourse() != null ? topic.getCourse().getTitle() : "Unknown Course";
+                
+                activities.add(OverallDashboardResponse.RecentActivityItem.builder()
+                        .activityType("TOPIC_COMPLETED")
+                        .title(topic.getName())
+                        .courseName(courseName)
+                        .timestamp(tp.getCompletedAt().format(formatter))
+                        .details("Completed topic: " + topic.getName())
+                        .build());
+            }
+        }
+
+        // Sort all activities by timestamp
+        activities.sort((a, b) -> {
+            try {
+                LocalDateTime timeA = LocalDateTime.parse(a.getTimestamp(), formatter);
+                LocalDateTime timeB = LocalDateTime.parse(b.getTimestamp(), formatter);
+                return timeB.compareTo(timeA);
+            } catch (Exception e) {
+                return 0;
+            }
+        });
+
+        return activities.subList(0, Math.min(10, activities.size()));
+    }
+
+    private OverallDashboardResponse.StreakInfo buildStreakInfo(Long studentId) {
+        List<TopicProgress> completedTopics = topicProgressRepository.findByStudentId(studentId).stream()
+                .filter(tp -> tp.getCompleted() != null && tp.getCompleted() && tp.getCompletedAt() != null)
+                .sorted(Comparator.comparing(TopicProgress::getCompletedAt).reversed())
+                .collect(Collectors.toList());
+
+        Set<String> uniqueDays = completedTopics.stream()
+                .map(tp -> tp.getCompletedAt().toLocalDate().toString())
+                .collect(Collectors.toSet());
+
+        // Calculate current streak
+        int currentStreak = 0;
+        LocalDateTime today = LocalDateTime.now();
+        LocalDateTime checkDate = today;
+        
+        while (uniqueDays.contains(checkDate.toLocalDate().toString())) {
+            currentStreak++;
+            checkDate = checkDate.minusDays(1);
+        }
+
+        // This week's active days
+        List<String> thisWeekDays = completedTopics.stream()
+                .filter(tp -> tp.getCompletedAt().isAfter(today.minusDays(7)))
+                .map(tp -> tp.getCompletedAt().toLocalDate().toString())
+                .distinct()
+                .collect(Collectors.toList());
+
+        boolean isActiveToday = uniqueDays.contains(today.toLocalDate().toString());
+
+        return OverallDashboardResponse.StreakInfo.builder()
+                .currentStreak(currentStreak)
+                .longestStreak(currentStreak) // Simplified - would need historical data
+                .activeDaysThisWeek(thisWeekDays)
+                .isActiveToday(isActiveToday)
+                .build();
+    }
+
+    private List<String> buildBadges(Long studentId) {
+        List<String> badges = new ArrayList<>();
+        
+        List<QuizAttempt> attempts = quizAttemptRepository.findByStudentId(studentId);
+        List<TopicProgress> completedTopics = topicProgressRepository.findByStudentId(studentId).stream()
+                .filter(tp -> tp.getCompleted() != null && tp.getCompleted())
+                .collect(Collectors.toList());
+
+        // Quiz badges
+        if (attempts.size() >= 10) badges.add("Quiz Master");
+        if (attempts.stream().anyMatch(a -> a.getScore() == 100)) badges.add("Perfect Score");
+        if (attempts.size() >= 50) badges.add("Quiz Champion");
+
+        // Topic badges
+        if (completedTopics.size() >= 10) badges.add("Knowledge Seeker");
+        if (completedTopics.size() >= 25) badges.add("Learning Expert");
+
+        // Streak badges
+        OverallDashboardResponse.StreakInfo streakInfo = buildStreakInfo(studentId);
+        if (streakInfo.getCurrentStreak() >= 7) badges.add("Week Warrior");
+        if (streakInfo.getCurrentStreak() >= 30) badges.add("Monthly Master");
+
+        return badges;
+    }
+
+    private List<OverallDashboardResponse.CoursePerformanceSummary> buildCoursePerformances(Long studentId, List<Long> courseIds) {
+        List<OverallDashboardResponse.CoursePerformanceSummary> performances = new ArrayList<>();
+
+        for (Long courseId : courseIds) {
+            Course course = courseRepository.findById(courseId).orElse(null);
+            if (course == null) continue;
+
+            CourseProgress progress = courseProgressRepository.findByStudentIdAndCourseId(studentId, courseId)
+                    .orElse(null);
+
+            List<QuizAttempt> courseAttempts = quizAttemptRepository.findByStudentIdAndCourseId(studentId, courseId);
+            double avgQuizScore = courseAttempts.stream()
+                    .mapToDouble(QuizAttempt::getScore)
+                    .average()
+                    .orElse(0.0);
+
+            List<Topic> topics = topicRepository.findByCourseId(courseId);
+            int topicsCompleted = (int) topics.stream()
+                    .filter(t -> topicProgressRepository.findByStudentIdAndTopicId(studentId, t.getId())
+                            .map(tp -> tp.getCompleted() != null && tp.getCompleted())
+                            .orElse(false))
+                    .count();
+
+            performances.add(OverallDashboardResponse.CoursePerformanceSummary.builder()
+                    .courseId(courseId)
+                    .courseName(course.getTitle())
+                    .completionPercentage(progress != null ? progress.getProgressPercent() : 0.0)
+                    .quizzesTaken(courseAttempts.size())
+                    .averageQuizScore(Math.round(avgQuizScore * 100.0) / 100.0)
+                    .topicsCompleted(topicsCompleted)
+                    .materialsCompleted(0) // Could be calculated
+                    .performanceLevel(determinePerformanceLevel(avgQuizScore))
+                    .build());
+        }
+
+        return performances;
+    }
+
+    private String determinePerformanceLevel(double score) {
+        if (score >= 90) return "EXCELLENT";
+        if (score >= 75) return "GOOD";
+        if (score >= 60) return "AVERAGE";
+        return "NEEDS_IMPROVEMENT";
+    }
+
+    private String determineSkillLevel(int skillScore) {
+        if (skillScore >= 80) return "EXPERT";
+        if (skillScore >= 60) return "ADVANCED";
+        if (skillScore >= 40) return "INTERMEDIATE";
+        return "BEGINNER";
+    }
+}

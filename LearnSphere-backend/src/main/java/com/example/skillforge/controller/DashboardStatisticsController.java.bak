@@ -1,0 +1,51 @@
+package com.example.skillforge.controller;
+
+import com.example.skillforge.dto.response.OverallDashboardResponse;
+import com.example.skillforge.service.DashboardStatisticsService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.*;
+
+/**
+ * Controller for comprehensive dashboard statistics
+ * Provides overall performance metrics across courses, quizzes, topics, and materials
+ */
+@RestController
+@RequestMapping("/api/dashboard")
+@RequiredArgsConstructor
+@CrossOrigin(origins = "*")
+public class DashboardStatisticsController {
+
+    private final DashboardStatisticsService dashboardStatisticsService;
+
+    /**
+     * Get comprehensive dashboard statistics for a student
+     * Includes metrics for courses, quizzes, topics, materials, time, and performance
+     * 
+     * @param studentId The ID of the student
+     * @return Comprehensive dashboard response with all metrics
+     */
+    @GetMapping("/student/{studentId}/overall-statistics")
+    @PreAuthorize("hasAnyRole('STUDENT', 'ADMIN')")
+    public ResponseEntity<OverallDashboardResponse> getOverallStatistics(@PathVariable Long studentId) {
+        OverallDashboardResponse statistics = dashboardStatisticsService.getOverallDashboardStatistics(studentId);
+        return ResponseEntity.ok(statistics);
+    }
+
+    /**
+     * Get comprehensive dashboard statistics for the currently authenticated student
+     * 
+     * @return Comprehensive dashboard response with all metrics
+     */
+    @GetMapping("/my-overall-statistics")
+    @PreAuthorize("hasRole('STUDENT')")
+    public ResponseEntity<OverallDashboardResponse> getMyOverallStatistics() {
+        // In a real implementation, get studentId from SecurityContext
+        // For now, this is a placeholder - you'll need to extract from JWT
+        Long studentId = 1L; // Replace with actual student ID from authentication
+        
+        OverallDashboardResponse statistics = dashboardStatisticsService.getOverallDashboardStatistics(studentId);
+        return ResponseEntity.ok(statistics);
+    }
+}
