@@ -20,6 +20,7 @@ public class UserResponse {
     private String bio;
     private String profileImage;
     private String bannerImage;
+    private String skills;
     private Boolean isActive;
     private LocalDateTime createdAt;
     private StudentStatsDto studentStats;

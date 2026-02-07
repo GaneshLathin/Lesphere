@@ -1643,7 +1643,9 @@ const CourseDetail = () => {
           </Card>
 
           {/* Review Section */}
-          <ReviewSection courseId={courseId} user={user} isEnrolled={isEnrolled} />
+          <div id="review-section" className="scroll-mt-20">
+            <ReviewSection courseId={courseId} user={user} isEnrolled={isEnrolled} />
+          </div>
 
         </div>
 

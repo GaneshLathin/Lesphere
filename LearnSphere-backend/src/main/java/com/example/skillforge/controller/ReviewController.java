@@ -45,6 +45,31 @@ public class ReviewController {
         }
     }
 
+    @PutMapping("/{id}")
+    public ResponseEntity<ApiResponse<Review>> updateReview(@PathVariable Long id, @RequestBody ReviewRequest req) {
+        Review review = new Review();
+        review.setRating(req.getRating());
+        review.setComment(req.getComment());
+        
+        try {
+            Review updated = reviewService.updateReview(id, review);
+            return ResponseEntity.ok(ApiResponse.success("Review updated", updated));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
+        }
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<ApiResponse<Void>> deleteReview(@PathVariable Long id) {
+        try {
+            reviewService.deleteReview(id);
+            return ResponseEntity.ok(ApiResponse.success("Review deleted", null));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
+        }
+    }
+
+
     @Data
     public static class ReviewRequest {
         private Long courseId;

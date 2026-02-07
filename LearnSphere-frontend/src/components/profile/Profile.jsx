@@ -16,6 +16,8 @@ import Modal from '../common/Modal';
 import Pagination from '../common/Pagination';
 import ActivityHeatmap from './ActivityHeatmap';
 import { BookOpen, Download } from 'lucide-react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 // --- Sub-components ---
 
@@ -111,6 +113,187 @@ const Profile = () => {
     const [showPhotoMenu, setShowPhotoMenu] = useState(false);
     const [showBannerMenu, setShowBannerMenu] = useState(false);
 
+    // Resume Generation
+    const generateResume = () => {
+        try {
+            const doc = new jsPDF();
+            const pageWidth = doc.internal.pageSize.getWidth();
+            const pageHeight = doc.internal.pageSize.getHeight();
+
+            // Colors
+            const darkGrey = [62, 68, 74]; // #3e444a - Header Background
+            const textGrey = [80, 80, 80]; // Body Text
+            const sectionGrey = [50, 50, 50]; // Section Headers
+
+            // --- HEADER SECTION (Dark Background) ---
+            doc.setFillColor(...darkGrey);
+            doc.rect(0, 0, pageWidth, 55, 'F');
+
+            // Initials Box
+            const initials = formData.name
+                ? (formData.name.charAt(0) + (formData.name.split(' ')[1]?.charAt(0) || '')).toUpperCase()
+                : 'ST';
+
+            doc.setDrawColor(255, 255, 255);
+            doc.setLineWidth(1);
+            doc.rect(15, 12, 30, 30); // Box for initials
+
+            doc.setFontSize(28);
+            doc.setTextColor(255, 255, 255);
+            doc.setFont("helvetica", "normal");
+            doc.text(initials, 30, 31, { align: 'center' }); // Centered initials
+
+            // Name
+            doc.setFontSize(26);
+            doc.setFont("helvetica", "bold");
+            doc.text((formData.name || 'Student Name').toUpperCase(), 55, 22);
+
+            // Contact Info
+            doc.setFontSize(9);
+            doc.setFont("helvetica", "normal");
+            doc.setTextColor(200, 200, 200);
+
+            let contactY = 32;
+            doc.text(formData.email || '', 55, contactY);
+            contactY += 5;
+            if (formData.phone) {
+                doc.text(formData.phone, 55, contactY);
+            }
+            // Role/Title
+            doc.setFontSize(10);
+            doc.setFont("helvetica", "bold");
+            doc.setTextColor(255, 255, 255);
+            doc.text((formData.role || 'Student').toUpperCase(), 55, 48);
+
+
+            // --- BODY CONTENT ---
+            let currentY = 70;
+            const leftMargin = 15;
+            const contentWidth = pageWidth - (leftMargin * 2);
+
+            // Helper for Section Headers
+            const addSectionHeader = (title) => {
+                doc.setFontSize(11);
+                doc.setTextColor(...sectionGrey);
+                doc.setFont("helvetica", "bold");
+                doc.text(title.toUpperCase(), leftMargin, currentY);
+
+                currentY += 2;
+                doc.setDrawColor(200, 200, 200);
+                doc.setLineWidth(0.5);
+                doc.line(leftMargin, currentY, pageWidth - leftMargin, currentY);
+                currentY += 8;
+            };
+
+            // 1. SUMMARY
+            if (formData.bio) {
+                addSectionHeader('Summary');
+
+                doc.setFontSize(10);
+                doc.setFont("helvetica", "normal");
+                doc.setTextColor(...textGrey);
+
+                const splitBio = doc.splitTextToSize(formData.bio, contentWidth);
+                doc.text(splitBio, leftMargin, currentY);
+                currentY += (splitBio.length * 5) + 10;
+            }
+
+            // 2. SKILLS (Badges & Stats & User Skills)
+            if (formData.studentStats || formData.skills) {
+                addSectionHeader('Skills & Achievements');
+
+                // 2 Column Layout for Skills
+                const col1X = leftMargin + 5;
+                const col2X = pageWidth / 2 + 5;
+                let skillY = currentY;
+
+                const userSkills = formData.skills ? formData.skills.split(',').map(s => s.trim()).filter(s => s) : [];
+
+                const skillsList = [
+                    ...userSkills
+                ];
+
+                doc.setFontSize(10);
+                doc.setTextColor(...textGrey);
+
+                skillsList.forEach((skill, index) => {
+                    const xPos = index % 2 === 0 ? col1X : col2X;
+                    if (index % 2 === 0 && index > 0) skillY += 6;
+
+                    doc.text(`•  ${skill}`, xPos, skillY);
+                });
+
+                currentY = skillY + 15;
+            } else {
+                // Push down if no stats (unlikely for student)
+                currentY += 5;
+            }
+
+            // 3. EXPERIENCE (Mapped to Completed Courses)
+            if (completedCourses.length > 0) {
+                addSectionHeader('Recent Completed Courses');
+
+                completedCourses.forEach(course => {
+                    // Check page break
+                    if (currentY > pageHeight - 30) {
+                        doc.addPage();
+                        currentY = 20;
+                    }
+
+                    // Title & Instructor
+                    doc.setFontSize(11);
+                    doc.setFont("helvetica", "bold");
+                    doc.setTextColor(60, 60, 60);
+                    doc.text(course.courseTitle, leftMargin, currentY);
+
+                    // Date (Right Aligned)
+                    const dateStr = new Date(course.completedAt).toLocaleDateString();
+                    doc.setFont("helvetica", "italic");
+                    doc.setFontSize(9);
+                    doc.text(dateStr, pageWidth - leftMargin, currentY, { align: 'right' });
+
+                    currentY += 5;
+
+                    // Instructor / Platform
+                    doc.setFontSize(10);
+                    doc.setFont("helvetica", "normal");
+                    doc.setTextColor(100, 100, 100);
+                    doc.text(`Instructor: ${course.instructorName || 'LearnSphere'}`, leftMargin, currentY);
+
+                    currentY += 8;
+                });
+                currentY += 5;
+            }
+
+            // 4. EDUCATION (Static / Join Date)
+            addSectionHeader('Education & Training');
+
+            doc.setFontSize(11);
+            doc.setFont("helvetica", "bold");
+            doc.setTextColor(60, 60, 60);
+            doc.text("LearnSphere Educational Platform", leftMargin, currentY);
+
+            doc.setFontSize(9);
+            doc.setFont("helvetica", "italic");
+            doc.text(new Date(formData.createdAt).getFullYear().toString(), pageWidth - leftMargin, currentY, { align: 'right' });
+
+            currentY += 5;
+
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(10);
+            doc.setTextColor(100, 100, 100);
+            doc.text(`Active Student - Level ${formData.studentStats?.currentLevel || 'Beginner'}`, leftMargin, currentY);
+
+            // Save
+            const safeName = formData.name ? formData.name.replace(/\s+/g, '_') : 'My';
+            doc.save(`${safeName}_Resume.pdf`);
+            toast.success("Resume downloaded successfully!");
+        } catch (error) {
+            console.error("Resume generation failed", error);
+            toast.error("Failed to generate resume.");
+        }
+    };
+
     // Modal States
     const [showBannerHintModal, setShowBannerHintModal] = useState(false);
     const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
@@ -122,6 +305,7 @@ const Profile = () => {
         phone: '',
         bio: '',
         role: '',
+        skills: '', // New Field
         profileImage: null,
         bannerImage: null,
         studentStats: null,
@@ -129,6 +313,7 @@ const Profile = () => {
     });
 
     const [completedCourses, setCompletedCourses] = useState([]);
+    const [skillInput, setSkillInput] = useState(''); // Local state for input
 
     // Pagination for Learning History
     const [currentPage, setCurrentPage] = useState(1);
@@ -151,13 +336,9 @@ const Profile = () => {
 
     const fetchCompletedCourses = async () => {
         try {
-            // Need user.id, if not available in redux immediately, we might rely on profile fetch. 
-            // Better to wait for user to be loaded. But assuming user is present from redux state auth.
             if (user?.id) {
                 const enrollments = await enrollmentService.getStudentEnrollments(user.id);
-                // Filter completed
                 const completed = enrollments.filter(e => e.isCompleted || e.completionPercentage === 100);
-                // Sort by latest completed
                 completed.sort((a, b) => new Date(b.completedAt) - new Date(a.completedAt));
                 setCompletedCourses(completed);
             }
@@ -172,14 +353,8 @@ const Profile = () => {
             const res = await api.post(`/certificates/generate/${courseId}?studentId=${user.userId}`);
             const { uid } = res.data;
 
-            // 2. Download PDF
-            // We can redirect to download url or fetch blob
-            const downloadUrl = `${api.defaults.baseURL}/certificates/download/${uid}`; // Direct link might need auth if not using cookie
-
-            // Using blob approach to handle auth headers if needed
             const pdfRes = await api.get(`/certificates/download/${uid}`, { responseType: 'blob' });
 
-            // Create blob link
             const url = window.URL.createObjectURL(new Blob([pdfRes.data]));
             const link = document.createElement('a');
             link.href = url;
@@ -207,6 +382,7 @@ const Profile = () => {
                 phone: data.phone || '',
                 bio: data.bio || '',
                 role: data.role || '',
+                skills: data.skills || '', // Fetch skills
                 profileImage: data.profileImage,
                 bannerImage: data.bannerImage,
                 studentStats: data.studentStats,
@@ -227,6 +403,25 @@ const Profile = () => {
         setFormData((prev) => ({ ...prev, [name]: value }));
     };
 
+    // Skill Handlers
+    const handleAddSkill = (e) => {
+        e.preventDefault();
+        if (!skillInput.trim()) return;
+
+        const currentSkills = formData.skills ? formData.skills.split(',').map(s => s.trim()).filter(s => s) : [];
+        if (!currentSkills.includes(skillInput.trim())) {
+            const newSkills = [...currentSkills, skillInput.trim()].join(',');
+            setFormData(prev => ({ ...prev, skills: newSkills }));
+        }
+        setSkillInput('');
+    };
+
+    const handleRemoveSkill = (skillToRemove) => {
+        const currentSkills = formData.skills ? formData.skills.split(',').map(s => s.trim()).filter(s => s) : [];
+        const newSkills = currentSkills.filter(s => s !== skillToRemove).join(',');
+        setFormData(prev => ({ ...prev, skills: newSkills }));
+    };
+
     const handleUpdateProfile = async (e) => {
         e.preventDefault();
         try {
@@ -234,7 +429,8 @@ const Profile = () => {
             await profileService.updateProfile({
                 name: formData.name,
                 phone: formData.phone,
-                bio: formData.bio
+                bio: formData.bio,
+                skills: formData.skills // Send skills
             });
 
             toast.success('Profile updated successfully');
@@ -684,6 +880,16 @@ const Profile = () => {
                             icon={Shield}
                             label="Security"
                         />
+
+                        <div className="pt-2 mt-2 border-t border-gray-100">
+                            <button
+                                onClick={generateResume}
+                                className="flex items-center space-x-3 px-5 py-3 rounded-xl font-medium text-sm transition-all duration-200 w-full text-left text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+                            >
+                                <Download size={18} />
+                                <span>Download Resume</span>
+                            </button>
+                        </div>
                     </nav>
                 </div>
 
@@ -922,6 +1128,40 @@ const Profile = () => {
                                             <span className={`text-xs ${formData.bio.length >= 300 ? 'text-red-500 font-bold' : 'text-gray-400'}`}>
                                                 {formData.bio.length}/300
                                             </span>
+                                        </div>
+                                    </div>
+
+                                    {/* SKILLS INPUT */}
+                                    <div>
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2">Skills</label>
+                                        <div className="flex gap-2 mb-3">
+                                            <input
+                                                type="text"
+                                                value={skillInput}
+                                                onChange={(e) => setSkillInput(e.target.value)}
+                                                className="flex-1 px-4 py-3 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all"
+                                                placeholder="Add a skill (e.g. Java, React, Communication)"
+                                                onKeyDown={(e) => e.key === 'Enter' && handleAddSkill(e)}
+                                            />
+                                            <Button type="button" onClick={handleAddSkill} variant="primary" className="px-6">
+                                                Add
+                                            </Button>
+                                        </div>
+
+                                        {/* Skill Tags */}
+                                        <div className="flex flex-wrap gap-2">
+                                            {formData.skills && formData.skills.split(',').filter(s => s.trim()).map((skill, idx) => (
+                                                <span key={idx} className="flex items-center gap-1 px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-sm font-medium border border-blue-100">
+                                                    {skill}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleRemoveSkill(skill.trim())}
+                                                        className="hover:text-blue-900 ml-1 focus:outline-none"
+                                                    >
+                                                        &times;
+                                                    </button>
+                                                </span>
+                                            ))}
                                         </div>
                                     </div>
 
