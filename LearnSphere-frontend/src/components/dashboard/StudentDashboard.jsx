@@ -13,6 +13,7 @@ import {
   ChevronRight,
   Play,
   X,
+  AlertTriangle,
 } from "lucide-react";
 
 import { courseService } from "../../services/courseService";
@@ -24,6 +25,7 @@ import { topicService } from "../../services/topicService";
 import Card from "../common/Card";
 import Loader from "../common/Loader";
 import Button from "../common/Button";
+import Modal from "../common/Modal";
 import DashboardOverview from "./DashboardOverview";
 import toast from "react-hot-toast";
 import ProgressTracker from "../progress/ProgressTracker";
@@ -38,6 +40,10 @@ export default function StudentDashboard() {
   const [suggestedCourseId, setSuggestedCourseId] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // Unenroll Modal State
+  const [unenrollModalOpen, setUnenrollModalOpen] = useState(false);
+  const [courseToUnenroll, setCourseToUnenroll] = useState(null);
+
   // Carousel refs + state (declared early so helpers can use them)
   const carouselRef = useRef(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
@@ -51,8 +57,13 @@ export default function StudentDashboard() {
 
   // ----------------- Helper functions (declared BEFORE useEffect to avoid ref errors) -----------------
   const getProgress = (courseId) => {
-    const p = enrollments.find((e) => e.courseId === courseId);
-    return p?.completionPercentage ?? p?.progressPercent ?? 0;
+    const p = enrollments.find((e) => Number(e.courseId) === Number(courseId));
+    const progress = p?.completionPercentage ?? p?.progressPercent ?? 0;
+    // Debug logging
+    if (courseId && !p) {
+      console.log('⚠️ No progress found for courseId:', courseId, 'Available enrollments:', enrollments.map(e => ({ courseId: e.courseId, progress: e.completionPercentage })));
+    }
+    return progress;
   };
 
   const getLastAccessed = (courseId) => {
@@ -78,17 +89,24 @@ export default function StudentDashboard() {
     }
   };
 
-  const handleUnenroll = async (e, courseId, courseTitle) => {
+  const initiateUnenroll = (e, course) => {
     e.stopPropagation();
-    if (window.confirm(`Are you sure you want to unenroll from "${courseTitle}"?`)) {
-      try {
-        await enrollmentService.unenrollCourse(user.userId, courseId);
-        toast.success('Unenrolled successfully!');
-        loadDashboard(); // Reload to show updated enrollment
-      } catch (error) {
-        console.error('Unenroll failed:', error);
-        toast.error('Failed to unenroll');
-      }
+    setCourseToUnenroll(course);
+    setUnenrollModalOpen(true);
+  };
+
+  const confirmUnenroll = async () => {
+    if (!courseToUnenroll) return;
+
+    try {
+      await enrollmentService.unenrollCourse(user.userId, courseToUnenroll.id);
+      toast.success('Unenrolled successfully!');
+      loadDashboard(); // Reload to show updated enrollment
+      setUnenrollModalOpen(false);
+      setCourseToUnenroll(null);
+    } catch (error) {
+      console.error('Unenroll failed:', error);
+      toast.error('Failed to unenroll');
     }
   };
 
@@ -127,6 +145,7 @@ export default function StudentDashboard() {
       // 1) Fetch all published courses
       const res = await courseService.getPublishedCourses(user?.userId);
       const courseList = res?.data?.data ?? res?.data ?? [];
+      console.log('📚 Fetched Courses:', courseList.map(c => ({ id: c.id, title: c.title, isEnrolled: c.isEnrolled })));
       setCourses(Array.isArray(courseList) ? courseList : []);
 
       // 2) Fetch student progress (contains lastAccessed)
@@ -134,6 +153,8 @@ export default function StudentDashboard() {
       if (user?.studentId) {
         const progResp = await progressService.getStudentProgress(user.studentId);
         progressList = progResp?.data?.data ?? progResp?.data ?? [];
+        console.log('📊 Progress API Response:', progResp);
+        console.log('📊 Extracted Progress List:', progressList);
         setEnrollments(Array.isArray(progressList) ? progressList : []);
       } else {
         console.error('No studentId found for user:', user);
@@ -541,7 +562,7 @@ export default function StudentDashboard() {
                               <Play size={16} /> Continue
                             </button>
                             <button
-                              onClick={(e) => handleUnenroll(e, course.id, course.title)}
+                              onClick={(e) => initiateUnenroll(e, course)}
                               className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center justify-center gap-1"
                             >
                               <X size={16} /> Unenroll
@@ -592,6 +613,47 @@ export default function StudentDashboard() {
           </button>
         )}
       </div>
+
+      {/* UNENROLL MODAL */}
+      <Modal
+        isOpen={unenrollModalOpen}
+        onClose={() => setUnenrollModalOpen(false)}
+        title="Unenroll Course"
+        size="sm"
+      >
+        <div className="space-y-4">
+          <div className="flex items-start gap-3">
+            <div className="p-3 bg-red-100 rounded-full">
+              <AlertTriangle size={24} className="text-red-600" />
+            </div>
+            <div>
+              <p className="text-gray-700 font-medium mb-1">
+                Are you sure you want to unenroll from{' '}
+                <span className="font-bold text-gray-900">"{courseToUnenroll?.title}"</span>?
+              </p>
+              <p className="text-sm text-gray-500">
+                This action cannot be undone and all your progress will be lost.
+              </p>
+            </div>
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <Button
+              variant="outline"
+              onClick={() => setUnenrollModalOpen(false)}
+              className="px-5 border-gray-200 text-gray-600"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              onClick={confirmUnenroll}
+              className="px-5 bg-red-600 text-white hover:bg-red-700 shadow-red-200"
+            >
+              Unenroll
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
