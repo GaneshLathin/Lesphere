@@ -544,6 +544,10 @@ public class CourseService {
             }
         }
 
+        // ⭐ NEW: Fetch Rating Stats ⭐
+        Double avgRating = reviewRepository.getAverageRating(course.getId());
+        Long totalReviews = reviewRepository.countByCourseId(course.getId());
+
         return CourseResponse.builder()
                 .id(course.getId())
                 .title(course.getTitle())
@@ -567,6 +571,8 @@ public class CourseService {
                 .createdAt(course.getCreatedAt())
                 .progressPercent(progressPercent)
                 .lastAccessed(lastAccessed)
+                .averageRating(avgRating != null ? avgRating : 0.0)
+                .totalReviews(totalReviews != null ? totalReviews.intValue() : 0)
                 .build();
     }
 

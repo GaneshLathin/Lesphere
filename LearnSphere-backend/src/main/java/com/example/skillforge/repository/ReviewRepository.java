@@ -9,4 +9,9 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
     List<Review> findByCourseIdOrderByCreatedAtDesc(Long courseId);
     Optional<Review> findByStudentIdAndCourseId(Long studentId, Long courseId);
     void deleteByCourseId(Long courseId);
+
+    @org.springframework.data.jpa.repository.Query("SELECT AVG(r.rating) FROM Review r WHERE r.courseId = :courseId")
+    Double getAverageRating(Long courseId);
+
+    Long countByCourseId(Long courseId);
 }

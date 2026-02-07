@@ -32,6 +32,8 @@ public class CourseResponse {
     private String courseAdminName;
     private LocalDateTime createdAt;
     private Integer progressPercent; // NEW FIELD
+    private Double averageRating;
+    private Integer totalReviews;
 
     // ⭐ NEW ⭐ (Needed for sorting dashboard courses)
     private LocalDateTime lastAccessed;

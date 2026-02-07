@@ -963,6 +963,7 @@ import {
   Columns3,
   IndianRupee,
   Lock,
+  Star,
 } from "lucide-react";
 
 import Card from "../common/Card";
@@ -1594,6 +1595,13 @@ const CourseList = () => {
                             <span>{course.viewsCount || 0} views</span>
                           </div>
                         )}
+                        {course.averageRating > 0 && (
+                          <div className="flex items-center gap-1 text-yellow-500 font-bold ml-auto">
+                            <Star size={14} fill="currentColor" />
+                            <span>{course.averageRating.toFixed(1)}</span>
+                            <span className="text-gray-400 font-normal">({course.totalReviews})</span>
+                          </div>
+                        )}
                       </div>
 
                       <div className="pt-4 border-t flex items-center justify-between mt-auto">
@@ -1737,6 +1745,13 @@ const CourseList = () => {
                           <span>{course.viewsCount || 0} views</span>
                         </div>
                       )}
+                      {course.averageRating > 0 && (
+                        <div className="flex items-center gap-1 text-yellow-500 font-bold ml-auto">
+                          <Star size={14} fill="currentColor" />
+                          <span>{course.averageRating.toFixed(1)}</span>
+                          <span className="text-gray-400 font-normal">({course.totalReviews})</span>
+                        </div>
+                      )}
                     </div>
 
                     <div className="mt-4 pt-4 border-t flex items-center justify-between">
@@ -1767,34 +1782,37 @@ const CourseList = () => {
 
           {renderPagination()}
         </>
-      )}
+      )
+      }
 
       {/* DELETE MODAL */}
-      {showDeleteModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <Card className="p-6 w-full max-w-md">
-            <h3 className="text-xl font-bold mb-3">Confirm Delete</h3>
-            <p className="mb-6 text-gray-600">Are you sure you want to delete <strong>{courseToDelete?.title}</strong>? This action cannot be undone.</p>
+      {
+        showDeleteModal && (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+            <Card className="p-6 w-full max-w-md">
+              <h3 className="text-xl font-bold mb-3">Confirm Delete</h3>
+              <p className="mb-6 text-gray-600">Are you sure you want to delete <strong>{courseToDelete?.title}</strong>? This action cannot be undone.</p>
 
-            <div className="flex gap-3">
-              {/* <Button variant="danger" className="flex-1" onClick={confirmDelete} disabled={deleting}>{deleting ? "Deleting..." : "Delete"}</Button> */}
-              <Button
-                variant="danger"
-                className="flex-1"
-                onClick={confirmDelete}
-                disabled={deleting}
-              >
-                {deleting ? "Deleting..." : "Delete"}
-              </Button>
+              <div className="flex gap-3">
+                {/* <Button variant="danger" className="flex-1" onClick={confirmDelete} disabled={deleting}>{deleting ? "Deleting..." : "Delete"}</Button> */}
+                <Button
+                  variant="danger"
+                  className="flex-1"
+                  onClick={confirmDelete}
+                  disabled={deleting}
+                >
+                  {deleting ? "Deleting..." : "Delete"}
+                </Button>
 
-              <Button variant="secondary" className="flex-1" onClick={() => setShowDeleteModal(false)} disabled={deleting}>Cancel</Button>
-            </div>
-          </Card>
-        </div>
-      )}
+                <Button variant="secondary" className="flex-1" onClick={() => setShowDeleteModal(false)} disabled={deleting}>Cancel</Button>
+              </div>
+            </Card>
+          </div>
+        )
+      }
 
 
-    </div>
+    </div >
   );
 };
 
