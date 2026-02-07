@@ -1548,8 +1548,8 @@ const CourseList = () => {
                           </div>
 
                           {isInstructor && (
-                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${course.isPublished ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
-                              {course.isPublished ? 'Published' : 'Draft'}
+                            <span className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${course.isPublished ? 'bg-indigo-100 text-indigo-800' : 'bg-yellow-100 text-yellow-800'}`}>
+                              {course.isPublished ? <><Lock size={10} /> Live</> : 'Draft'}
                             </span>
                           )}
                         </div>
@@ -1689,8 +1689,8 @@ const CourseList = () => {
                           }`}>{course.difficultyLevel}</span>
 
                         {isInstructor && (
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${course.isPublished ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
-                            {course.isPublished ? 'Published' : 'Draft'}
+                          <span className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${course.isPublished ? 'bg-indigo-100 text-indigo-800' : 'bg-yellow-100 text-yellow-800'}`}>
+                            {course.isPublished ? <><Lock size={10} /> Live</> : 'Draft'}
                           </span>
                         )}
                       </div>

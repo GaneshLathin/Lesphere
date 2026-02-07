@@ -12,8 +12,6 @@ public interface CourseProgressRepository extends JpaRepository<CourseProgress, 
     Optional<CourseProgress> findByStudentIdAndCourseId(Long studentId, Long courseId);
 
     List<CourseProgress> findByStudentId(Long studentId);
-   
 
-
-
+    void deleteByCourseId(Long courseId);
 }

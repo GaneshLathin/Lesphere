@@ -243,6 +243,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -265,6 +266,10 @@ public class CourseService {
     private final TopicRepository topicRepository;
     private final TopicQuizProgressRepository topicQuizProgressRepository;
     private final S3StorageService s3StorageService;
+    private final TopicMaterialProgressRepository topicMaterialProgressRepository;
+    private final ReviewRepository reviewRepository;
+    private final CertificateRepository certificateRepository;
+    private final AnalyticsRepository analyticsRepository;
 
     @Transactional
     public CourseResponse createCourse(CourseRequest request, Long userId) {
@@ -454,15 +459,50 @@ public class CourseService {
     }
 
     @Transactional
+    @PreAuthorize("hasAnyRole('INSTRUCTOR', 'ADMIN')") // Ensure security
     public void deleteCourse(Long id) {
         Course course = courseRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Course not found"));
 
-        Instructor instructor = course.getInstructor();
-        instructor.setCoursesCreated(Math.max(0, instructor.getCoursesCreated() - 1));
-        instructorRepository.save(instructor);
+        // 1. Manually cleanup progress and other related data to avoid FK violations
+        
+        // Cleanup Reviews
+        reviewRepository.deleteByCourseId(id);
+        
+        // Cleanup Certificates
+        certificateRepository.deleteByCourseId(id);
+        
+        // Cleanup Course Progress
+        courseProgressRepository.deleteByCourseId(id);
+        
+        // Cleanup Analytics
+        analyticsRepository.deleteByCourseId(id);
+        
+        // Cleanup Topic-level progress
+        for (Topic topic : course.getTopics()) {
+            // Delete Topic Quiz Progress
+            topicQuizProgressRepository.deleteByTopicId(topic.getId());
+            
+            // Delete Topic Material Progress
+            for (Material material : topic.getMaterials()) {
+                topicMaterialProgressRepository.deleteByMaterialId(material.getId());
+            }
+            
+            // Delete Topic Progress
+            topicProgressRepository.deleteByTopicId(topic.getId());
+        }
 
+        // 2. Adjust Instructor stats
+        Instructor instructor = course.getInstructor();
+        if (instructor != null) {
+            instructor.setCoursesCreated(Math.max(0, instructor.getCoursesCreated() - 1));
+            instructorRepository.save(instructor);
+        }
+
+        // 3. Delete the Course (cascades to Topics, Quizzes, Enrollments)
         courseRepository.delete(course);
+        
+        System.out.println("Successfully deleted course and all associated student data for ID: " + id);
     }
 
     private CourseResponse mapToCourseResponse(Course course, Long userId) {

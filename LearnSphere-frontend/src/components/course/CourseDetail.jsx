@@ -1281,7 +1281,7 @@ const CourseDetail = () => {
                   {/* Certificate Download Section */}
                   <CertificateDownload
                     courseId={courseId}
-                    studentId={user.studentId}
+                    studentId={user.userId}
                     isCompleted={courseProgress.percentage === 100}
                   />
                 </div>

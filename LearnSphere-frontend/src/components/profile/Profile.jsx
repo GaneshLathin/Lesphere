@@ -169,7 +169,7 @@ const Profile = () => {
     const downloadCertificate = async (courseId) => {
         try {
             // 1. Generate/Get DTO
-            const res = await api.post(`/certificates/generate/${courseId}?studentId=${user.id}`);
+            const res = await api.post(`/certificates/generate/${courseId}?studentId=${user.userId}`);
             const { uid } = res.data;
 
             // 2. Download PDF

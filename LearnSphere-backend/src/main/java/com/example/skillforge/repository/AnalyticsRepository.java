@@ -14,4 +14,5 @@ public interface AnalyticsRepository extends JpaRepository<Analytics, Long> {
     Optional<Analytics> findByStudentIdAndCourseId(Long studentId, Long courseId);
     List<Analytics> findByStudentId(Long studentId);
     List<Analytics> findByCourseId(Long courseId);
+    void deleteByCourseId(Long courseId);
 }
