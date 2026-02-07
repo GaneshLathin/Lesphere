@@ -439,12 +439,7 @@ const InstructorDashboard = () => {
         >
           Overview
         </button>
-        <button
-          className={`pb-2 px-4 ${location.search.includes('tab=reports') ? 'border-b-2 border-blue-500 text-blue-600 font-medium' : 'text-gray-500 hover:text-gray-700'}`}
-          onClick={() => navigate('/instructor/dashboard?tab=reports')}
-        >
-          Reports
-        </button>
+       
       </div>
 
       {location.search.includes('tab=reports') ? (
