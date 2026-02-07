@@ -380,7 +380,8 @@ const Profile = () => {
 
     const downloadCertificate = async (courseId) => {
         try {
-            const res = await api.post(`/certificates/generate/${courseId}?studentId=${user.id}`);
+            // 1. Generate/Get DTO
+            const res = await api.post(`/certificates/generate/${courseId}?studentId=${user.userId}`);
             const { uid } = res.data;
 
             const pdfRes = await api.get(`/certificates/download/${uid}`, { responseType: 'blob' });

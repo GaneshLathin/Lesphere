@@ -767,21 +767,44 @@ public class CertificateService {
         private String verificationBaseUrl;
 
         @Transactional
-        public Certificate generateCertificate(Long studentId, Long courseId) {
-                // 1. Resolve Student directly by ID (since Controller passes studentId)
-                Student studentEntity = studentRepository.findById(studentId)
-                                .orElseThrow(() -> new RuntimeException(
-                                                "Student entity not found for Student ID: " + studentId));
-                User user = studentEntity.getUser();
+        public Certificate generateCertificate(Long studentIdOrUserId, Long courseId) {
+                // 1. Try to resolve Student by User ID (Primary scenario for frontend matching)
+                Optional<Student> studentByUserId = studentRepository.findByUserId(studentIdOrUserId);
+                if (studentByUserId.isPresent()) {
+                        return handleStudentCertificate(studentByUserId.get(), courseId);
+                }
 
-                // 2. Validate Completion via Enrollment (Source of Truth)
-                Enrollment enrollment = enrollmentRepository.findByStudentIdAndCourseId(studentId, courseId)
-                                .orElseThrow(() -> new RuntimeException("Enrollment not found"));
+                // 2. Fallback: Try to resolve Student by Student PK (Backward compatibility)
+                Optional<Student> studentByPk = studentRepository.findById(studentIdOrUserId);
+                if (studentByPk.isPresent()) {
+                        return handleStudentCertificate(studentByPk.get(), courseId);
+                }
+
+                // 3. Fallback: Check if User exists and is ADMIN or INSTRUCTOR (Preview mode)
+                User user = userRepository.findById(studentIdOrUserId)
+                                .orElseThrow(() -> new RuntimeException(
+                                                "Student entity or authorized User not found for ID: "
+                                                                + studentIdOrUserId));
+
+                if (user.getRole() == com.example.skillforge.model.enums.Role.ADMIN ||
+                                user.getRole() == com.example.skillforge.model.enums.Role.INSTRUCTOR) {
+                        return handleNonStudentPreview(user, courseId);
+                }
+
+                throw new RuntimeException("Course completion required to generate certificate.");
+        }
+
+        private Certificate handleStudentCertificate(Student studentEntity, Long courseId) {
+                User user = studentEntity.getUser();
+                Long actualStudentId = studentEntity.getId();
+
+                // Validate Completion via Enrollment (Source of Truth)
+                Enrollment enrollment = enrollmentRepository.findByStudentIdAndCourseId(actualStudentId, courseId)
+                                .orElseThrow(() -> new RuntimeException("Enrollment not found for course"));
 
                 if (!Boolean.TRUE.equals(enrollment.getIsCompleted())) {
                         if (enrollment.getCompletionPercentage() != null
                                         && enrollment.getCompletionPercentage() == 100) {
-                                // Fix data inconsistency: Progress is 100% but flag is false. Update flag.
                                 enrollment.setIsCompleted(true);
                                 enrollment.setCompletedAt(java.time.LocalDateTime.now());
                                 enrollmentRepository.save(enrollment);
@@ -790,7 +813,7 @@ public class CertificateService {
                         }
                 }
 
-                // Check idempotency using the USER ID (since Certificate links to User)
+                // Check idempotency using USER ID
                 Optional<Certificate> existingCert = certificateRepository.findByStudentIdAndCourseId(user.getId(),
                                 courseId);
                 if (existingCert.isPresent())
@@ -802,11 +825,34 @@ public class CertificateService {
                 Certificate certificate = Certificate.builder()
                                 .student(user)
                                 .course(course)
-                                .uid(UUID.randomUUID().toString())
+                                .uid(java.util.UUID.randomUUID().toString())
                                 .studentNameSnapshot(user.getName())
                                 .courseNameSnapshot(course.getTitle())
                                 .build();
 
+                return certificateRepository.save(certificate);
+        }
+
+        private Certificate handleNonStudentPreview(User user, Long courseId) {
+                // For Admins/Instructors, we allow "on-the-fly" generation without enrollment check.
+                // We still check for existing certificate to be efficient.
+                Optional<Certificate> existingCert = certificateRepository.findByStudentIdAndCourseId(user.getId(),
+                                courseId);
+                if (existingCert.isPresent())
+                        return existingCert.get();
+
+                Course course = courseRepository.findById(courseId)
+                                .orElseThrow(() -> new RuntimeException("Course not found"));
+
+                Certificate certificate = Certificate.builder()
+                                .student(user)
+                                .course(course)
+                                .uid(java.util.UUID.randomUUID().toString())
+                                .studentNameSnapshot(user.getName())
+                                .courseNameSnapshot(course.getTitle() + " (Preview)")
+                                .build();
+
+                // We save it so the PDF generator can find it by UID
                 return certificateRepository.save(certificate);
         }
 

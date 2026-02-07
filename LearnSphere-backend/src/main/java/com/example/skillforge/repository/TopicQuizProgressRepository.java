@@ -8,6 +8,6 @@ import java.util.Optional;
 
 public interface TopicQuizProgressRepository extends JpaRepository<TopicQuizProgress, Long> {
     Optional<TopicQuizProgress> findByStudentIdAndTopicId(Long studentId, Long topicId);
-   
 
+    void deleteByTopicId(Long topicId);
 }

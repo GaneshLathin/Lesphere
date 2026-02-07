@@ -204,14 +204,24 @@ const EditCourse = () => {
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <Button
-            variant="outline"
-            className={course?.isPublished ? "text-yellow-600 border-yellow-600 hover:bg-yellow-50" : "text-green-600 border-green-600 hover:bg-green-50"}
-            onClick={handlePublishToggle}
-            disabled={publishing}
-          >
-            {course?.isPublished ? 'Unpublish' : 'Publish'}
-          </Button>
+          {course?.isPublished ? (
+            <Button
+              variant="outline"
+              className="text-green-600 border-green-600 bg-green-50 opacity-80 cursor-default"
+              disabled={true}
+            >
+              Live
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              className="text-green-600 border-green-600 hover:bg-green-50"
+              onClick={handlePublishToggle}
+              disabled={publishing}
+            >
+              {publishing ? 'Publishing...' : 'Publish'}
+            </Button>
+          )}
 
           <Button
             variant="secondary"

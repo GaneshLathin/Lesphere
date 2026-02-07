@@ -17,7 +17,7 @@ const Footer = () => {
                                 <BookOpen className="h-5 w-5 text-white" />
                             </div>
                             <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400">
-                                LearnSphere-Platform
+                                LearnSphere
                             </span>
                         </div>
                         <p className="text-slate-400 leading-relaxed font-medium text-sm max-w-xs">

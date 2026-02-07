@@ -9,4 +9,5 @@ public interface TopicMaterialProgressRepository extends JpaRepository<TopicMate
     Optional<TopicMaterialProgress> findByStudentIdAndMaterialId(Long studentId, Long materialId);
     List<TopicMaterialProgress> findByStudentIdAndMaterialIdIn(Long studentId, List<Long> materialIds);
     List<TopicMaterialProgress> findByStudentId(Long studentId);
+    void deleteByMaterialId(Long materialId);
 }

@@ -26,6 +26,7 @@ import { progressService } from "../../services/progressService";
 import CertificateDownload from '../certificate/CertificateDownload'
 import ConfirmModal from '../common/ConfirmModal'
 import ReviewSection from './ReviewSection'
+import CourseReviewModal from './CourseReviewModal'
 
 
 const CourseDetail = () => {
@@ -215,6 +216,7 @@ const CourseDetail = () => {
   // Adaptive State
   const [nextStep, setNextStep] = useState(null);
   const [showCompletionModal, setShowCompletionModal] = useState(false);
+  const [showReviewModal, setShowReviewModal] = useState(false);
   const [nextCourseRecommendation, setNextCourseRecommendation] = useState(null);
 
   // Determine if popup should likely show (prevents flash)
@@ -223,6 +225,7 @@ const CourseDetail = () => {
   // Reset completion state when courseId changes (e.g. valid navigation to new course)
   useEffect(() => {
     setShowCompletionModal(false);
+    setShowReviewModal(false);
     setHasShownCompletion(false);
     setNextCourseRecommendation(null);
     setCourseProgress(null); // Fix: Clear progress so it doesn't trigger modal for new course using old data
@@ -244,7 +247,8 @@ const CourseDetail = () => {
     if (courseProgress && courseProgress.percentage === 100 && !hasShownCompletion && isEnrolled) {
       if (courseProgress.totalTopics > 0) { // Safety check
         fetchCompletionRecommendation();
-        setShowCompletionModal(true);
+        // TRIGGER REVIEW MODAL FIRST
+        setShowReviewModal(true);
         setHasShownCompletion(true); // Ensure it only shows once per session/load
       }
     }
@@ -1141,6 +1145,21 @@ const CourseDetail = () => {
           />
         )}
 
+        {/* ⭐ NEW: COURSE REVIEW MODAL ⭐ */}
+        <CourseReviewModal
+          isOpen={showReviewModal}
+          onClose={() => {
+            setShowReviewModal(false);
+            setShowCompletionModal(true); // Sequence to completion even if skipped
+          }}
+          onSubmitSuccess={() => {
+            setShowReviewModal(false);
+            setShowCompletionModal(true); // Sequence to completion
+          }}
+          courseId={courseId}
+          user={user}
+        />
+
         {/* 🔥 COMPLETION POPUP MODAL */}
         {showCompletionModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
@@ -1281,7 +1300,7 @@ const CourseDetail = () => {
                   {/* Certificate Download Section */}
                   <CertificateDownload
                     courseId={courseId}
-                    studentId={user.studentId}
+                    studentId={user.userId}
                     isCompleted={courseProgress.percentage === 100}
                   />
                 </div>
