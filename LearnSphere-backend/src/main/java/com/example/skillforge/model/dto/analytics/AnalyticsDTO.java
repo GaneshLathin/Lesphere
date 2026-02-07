@@ -124,4 +124,19 @@ public class AnalyticsDTO {
         private String uptime;
         private Double errors;
     }
+
+    @Data
+    @Builder
+    public static class StudentCourseProgressDTO {
+        private Long enrollmentId;
+        private String courseName;
+        private String studentName;
+        private String studentEmail;
+        private java.time.LocalDateTime enrolledDate;
+        private java.time.LocalDateTime startDate; // mapped from enrolledAt for now, or first access
+        private java.time.LocalDateTime completedDate;
+        private Integer completionPercentage;
+        private Long timeSpentMinutes;
+        private String status; // YET_TO_START, IN_PROGRESS, COMPLETED
+    }
 }

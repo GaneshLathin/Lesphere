@@ -250,6 +250,7 @@ import Button from "../common/Button";
 import Loader from "../common/Loader";
 import Input from "../common/Input";
 import toast from "react-hot-toast";
+import InstructorReports from "./analytics/instructor/InstructorReports";
 
 const InstructorDashboard = () => {
   const navigate = useNavigate();
@@ -430,142 +431,165 @@ const InstructorDashboard = () => {
         </Button>
       </div>
 
-      {/* STATS */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        {stats.map((stat) => {
-          const Icon = stat.icon;
-          return (
-            <Card key={stat.label} className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600">{stat.label}</p>
-                  <p className="text-3xl font-bold">{stat.value}</p>
-                </div>
-                <div className={`${stat.color} p-3 rounded-lg`}>
-                  <Icon size={24} className="text-white" />
-                </div>
-              </div>
-            </Card>
-          );
-        })}
+      {/* TABS */}
+      <div className="flex space-x-4 border-b mb-6">
+        <button
+          className={`pb-2 px-4 ${!location.search.includes('tab=reports') ? 'border-b-2 border-blue-500 text-blue-600 font-medium' : 'text-gray-500 hover:text-gray-700'}`}
+          onClick={() => navigate('/instructor/dashboard')}
+        >
+          Overview
+        </button>
+        <button
+          className={`pb-2 px-4 ${location.search.includes('tab=reports') ? 'border-b-2 border-blue-500 text-blue-600 font-medium' : 'text-gray-500 hover:text-gray-700'}`}
+          onClick={() => navigate('/instructor/dashboard?tab=reports')}
+        >
+          Reports
+        </button>
       </div>
 
-      {/* MY COURSES */}
-      <Card className="p-6">
+      {location.search.includes('tab=reports') ? (
+        <InstructorReports />
+      ) : (
+        <>
+          {/* STATS */}
 
-        <h2 className="text-xl font-bold mb-4">My Courses</h2>
-
-        {/* FILTER BAR — Enhanced UI */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 bg-gray-50 border rounded-lg mb-6">
-
-          {/* Search */}
-          <div className="flex items-center gap-2 bg-white p-2 rounded-lg border">
-            <Search size={18} className="text-gray-500" />
-            <input
-              type="text"
-              placeholder="Search courses..."
-              className="w-full outline-none"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            {stats.map((stat) => {
+              const Icon = stat.icon;
+              return (
+                <Card key={stat.label} className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-gray-600">{stat.label}</p>
+                      <p className="text-3xl font-bold">{stat.value}</p>
+                    </div>
+                    <div className={`${stat.color} p-3 rounded-lg`}>
+                      <Icon size={24} className="text-white" />
+                    </div>
+                  </div>
+                </Card>
+              );
+            })}
           </div>
 
-          {/* Status */}
-          <select
-            value={status}
-            onChange={(e) => setStatus(e.target.value)}
-            className="border p-2 rounded bg-white"
-          >
-            <option value="">All Status</option>
-            <option value="true">Published</option>
-            <option value="false">Draft</option>
-          </select>
+          {/* MY COURSES */}
+          <Card className="p-6">
 
-          {/* Difficulty */}
-          <select
-            value={difficulty}
-            onChange={(e) => setDifficulty(e.target.value)}
-            className="border p-2 rounded bg-white"
-          >
-            <option value="">Difficulty</option>
-            <option value="BEGINNER">Beginner</option>
-            <option value="INTERMEDIATE">Intermediate</option>
-            <option value="ADVANCED">Advanced</option>
-          </select>
+            <h2 className="text-xl font-bold mb-4">My Courses</h2>
 
-          {/* Sort */}
-          <select
-            value={`${sortBy}-${direction}`}
-            onChange={(e) => {
-              const [s, d] = e.target.value.split("-");
-              setSortBy(s);
-              setDirection(d);
-            }}
-            className="border p-2 rounded bg-white"
-          >
-            <option value="createdAt-desc">Newest First</option>
-            <option value="createdAt-asc">Oldest First</option>
-            <option value="title-asc">A → Z</option>
-            <option value="duration-asc">Duration Low → High</option>
-          </select>
-        </div>
+            {/* FILTER BAR — Enhanced UI */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 bg-gray-50 border rounded-lg mb-6">
 
-        {/* COURSE LIST */}
-        {paginated.length === 0 ? (
-          <p className="text-center py-6 text-gray-600">No courses found</p>
-        ) : (
-          paginated.map((course) => (
-            <div
-              key={course.id}
-              className="flex items-center justify-between p-4 border rounded-lg mb-3 hover:bg-gray-50 transition shadow-sm"
-            >
-              <div
-                className="flex-1 cursor-pointer"
-                onClick={() => navigate(`/courses/${course.id}`, { state: { from: "dashboard" } })}
+              {/* Search */}
+              <div className="flex items-center gap-2 bg-white p-2 rounded-lg border">
+                <Search size={18} className="text-gray-500" />
+                <input
+                  type="text"
+                  placeholder="Search courses..."
+                  className="w-full outline-none"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </div>
+
+              {/* Status */}
+              <select
+                value={status}
+                onChange={(e) => setStatus(e.target.value)}
+                className="border p-2 rounded bg-white"
               >
-                <div className="flex items-center gap-3">
-                  <h3 className="font-semibold text-gray-900">{course.title}</h3>
-                  <span
-                    className={`px-2 py-1 rounded-full text-xs ${course.isPublished
-                      ? "bg-green-100 text-green-800"
-                      : "bg-yellow-100 text-yellow-800"
-                      }`}
-                  >
-                    {course.isPublished ? "Published" : "Draft"}
-                  </span>
-                </div>
-                <p className="text-sm text-gray-500">
-                  {course.totalEnrollments || 0} students • {course.totalTopics || 0} topics
-                </p>
-              </div>
+                <option value="">All Status</option>
+                <option value="true">Published</option>
+                <option value="false">Draft</option>
+              </select>
 
-              <div className="flex gap-2">
-                {!course.isPublished && (
-                  <Button
-                    size="sm"
-                    variant="success"
-                    onClick={() => handlePublishToggle(course.id, course.isPublished)}
-                    icon={Eye}
-                  >
-                    Publish
-                  </Button>
-                )}
+              {/* Difficulty */}
+              <select
+                value={difficulty}
+                onChange={(e) => setDifficulty(e.target.value)}
+                className="border p-2 rounded bg-white"
+              >
+                <option value="">Difficulty</option>
+                <option value="BEGINNER">Beginner</option>
+                <option value="INTERMEDIATE">Intermediate</option>
+                <option value="ADVANCED">Advanced</option>
+              </select>
 
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  icon={Edit}
-                  onClick={() => navigate(`/courses/edit/${course.id}`)}
-                >
-                  Edit
-                </Button>
-              </div>
+              {/* Sort */}
+              <select
+                value={`${sortBy}-${direction}`}
+                onChange={(e) => {
+                  const [s, d] = e.target.value.split("-");
+                  setSortBy(s);
+                  setDirection(d);
+                }}
+                className="border p-2 rounded bg-white"
+              >
+                <option value="createdAt-desc">Newest First</option>
+                <option value="createdAt-asc">Oldest First</option>
+                <option value="title-asc">A → Z</option>
+                <option value="duration-asc">Duration Low → High</option>
+              </select>
             </div>
-          ))
-        )}
 
-        {renderPagination()}
-      </Card>
+            {/* COURSE LIST */}
+            {paginated.length === 0 ? (
+              <p className="text-center py-6 text-gray-600">No courses found</p>
+            ) : (
+              paginated.map((course) => (
+                <div
+                  key={course.id}
+                  className="flex items-center justify-between p-4 border rounded-lg mb-3 hover:bg-gray-50 transition shadow-sm"
+                >
+                  <div
+                    className="flex-1 cursor-pointer"
+                    onClick={() => navigate(`/courses/${course.id}`, { state: { from: "dashboard" } })}
+                  >
+                    <div className="flex items-center gap-3">
+                      <h3 className="font-semibold text-gray-900">{course.title}</h3>
+                      <span
+                        className={`px-2 py-1 rounded-full text-xs ${course.isPublished
+                          ? "bg-green-100 text-green-800"
+                          : "bg-yellow-100 text-yellow-800"
+                          }`}
+                      >
+                        {course.isPublished ? "Published" : "Draft"}
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-500">
+                      {course.totalEnrollments || 0} students • {course.totalTopics || 0} topics
+                    </p>
+                  </div>
+
+                  <div className="flex gap-2">
+                    {!course.isPublished && (
+                      <Button
+                        size="sm"
+                        variant="success"
+                        onClick={() => handlePublishToggle(course.id, course.isPublished)}
+                        icon={Eye}
+                      >
+                        Publish
+                      </Button>
+                    )}
+
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      icon={Edit}
+                      onClick={() => navigate(`/courses/edit/${course.id}`)}
+                    >
+                      Edit
+                    </Button>
+                  </div>
+                </div>
+              ))
+            )}
+
+            {renderPagination()}
+          </Card>
+        </>
+      )}
     </div>
   );
 };

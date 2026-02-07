@@ -16,8 +16,14 @@ const getAdminAnalytics = async () => {
     return response.data;
 };
 
+const getInstructorStudentProgress = async () => {
+    const response = await api.get('/analytics/instructor/progress');
+    return response.data;
+};
+
 export default {
     getStudentAnalytics,
     getInstructorAnalytics,
-    getAdminAnalytics
+    getAdminAnalytics,
+    getInstructorStudentProgress
 };

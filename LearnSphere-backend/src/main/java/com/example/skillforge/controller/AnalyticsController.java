@@ -21,7 +21,8 @@ public class AnalyticsController {
     private final UserRepository userRepository;
 
     @GetMapping("/student")
-    public ResponseEntity<AnalyticsDTO.StudentAnalytics> getStudentAnalytics(@AuthenticationPrincipal UserDetails userDetails) {
+    public ResponseEntity<AnalyticsDTO.StudentAnalytics> getStudentAnalytics(
+            @AuthenticationPrincipal UserDetails userDetails) {
         User user = userRepository.findByEmail(userDetails.getUsername())
                 .orElseThrow(() -> new RuntimeException("User not found"));
         // Assuming User entity has a direct relation to Student
@@ -32,13 +33,25 @@ public class AnalyticsController {
     }
 
     @GetMapping("/instructor")
-    public ResponseEntity<AnalyticsDTO.InstructorAnalytics> getInstructorAnalytics(@AuthenticationPrincipal UserDetails userDetails) {
+    public ResponseEntity<AnalyticsDTO.InstructorAnalytics> getInstructorAnalytics(
+            @AuthenticationPrincipal UserDetails userDetails) {
         User user = userRepository.findByEmail(userDetails.getUsername())
                 .orElseThrow(() -> new RuntimeException("User not found"));
         if (user.getInstructor() == null) {
             return ResponseEntity.badRequest().build();
         }
         return ResponseEntity.ok(analyticsService.getInstructorAnalytics(user.getInstructor().getId()));
+    }
+
+    @GetMapping("/instructor/progress")
+    public ResponseEntity<java.util.List<AnalyticsDTO.StudentCourseProgressDTO>> getInstructorStudentProgress(
+            @AuthenticationPrincipal UserDetails userDetails) {
+        User user = userRepository.findByEmail(userDetails.getUsername())
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        if (user.getInstructor() == null) {
+            return ResponseEntity.badRequest().build();
+        }
+        return ResponseEntity.ok(analyticsService.getInstructorStudentProgress(user.getInstructor().getId()));
     }
 
     @GetMapping("/admin")

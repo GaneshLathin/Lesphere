@@ -9,16 +9,22 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 import java.util.Optional;
 
-
 @Repository
 public interface EnrollmentRepository extends JpaRepository<Enrollment, Long> {
     Optional<Enrollment> findByStudentIdAndCourseId(Long studentId, Long courseId);
+
     List<Enrollment> findByStudentId(Long studentId);
+
     List<Enrollment> findByCourseId(Long courseId);
+
+    List<Enrollment> findByCourseIdIn(List<Long> courseIds);
+
     Boolean existsByStudentIdAndCourseId(Long studentId, Long courseId);
+
     Long countByCourseId(Long courseId);
+
     void deleteByCourse_Id(Long courseId);
-    
+
     List<Enrollment> findByStudentIdAndIsCompletedTrue(Long studentId);
 
     // Analytics Queries
@@ -33,7 +39,6 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment, Long> {
 
     @Query("SELECT e.course.title, e.completionPercentage FROM Enrollment e WHERE e.student.id = :studentId")
     List<Object[]> findCourseProgressByStudent(@Param("studentId") Long studentId);
-
 
     @Query("SELECT e.course.title, COUNT(e) FROM Enrollment e GROUP BY e.course.title ORDER BY COUNT(e) DESC")
     List<Object[]> findTopPerformingCourses();
