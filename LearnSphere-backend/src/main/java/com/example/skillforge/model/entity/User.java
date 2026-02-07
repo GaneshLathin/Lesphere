@@ -37,6 +37,9 @@ public class User {
     private String bio;
     private String profileImage;
     private String bannerImage;
+    
+    @Column(columnDefinition = "TEXT")
+    private String skills; // Comma-separated list of skills
 
     @Column(nullable = false)
     private Boolean isActive = true;

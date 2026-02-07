@@ -37,11 +37,69 @@ export default function QuizPlayPage() {
   const QUESTIONS_PER_PAGE = 1
   const [page, setPage] = useState(0)
 
-  // ---------------- LOAD QUIZ ----------------
   useEffect(() => {
     loadQuiz()
     // eslint-disable-next-line
   }, [resolvedQuizId])
+
+  // Refs for Event Listeners
+  const submittedRef = React.useRef(submittedResult)
+  const submittingRef = React.useRef(submitting)
+
+  useEffect(() => {
+    submittedRef.current = submittedResult
+  }, [submittedResult])
+
+  useEffect(() => {
+    submittingRef.current = submitting
+  }, [submitting])
+
+  // ---------------- SECURITY ----------------
+  useEffect(() => {
+    if (readOnly) return;
+
+    const handleVisibilityChange = () => {
+      if (document.hidden && !submittedRef.current && !submittingRef.current) {
+        toast.error("Tab switch detected! Quiz Auto-Submitted.", {
+          icon: '🚨',
+          duration: 5000
+        });
+        handleSubmit(true);
+      }
+    };
+
+    const handleKeyUp = (e) => {
+      // 2. Screenshot Keys (PrintScreen)
+      if (e.key === 'PrintScreen' || e.keyCode === 44) {
+        if (!submittedRef.current && !submittingRef.current) {
+          toast.dismiss();
+          toast.error("Screenshot attempt detected! Quiz Auto-Submitted.", { icon: '📸', duration: 5000 });
+          handleSubmit(true);
+        }
+      }
+    };
+
+    const preventActions = (e) => {
+      e.preventDefault();
+      toast.error("Action not allowed during quiz!", { id: 'security-warning' });
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    document.addEventListener("keyup", handleKeyUp);
+    document.addEventListener("contextmenu", preventActions);
+    document.addEventListener("copy", preventActions);
+    document.addEventListener("cut", preventActions);
+    document.addEventListener("paste", preventActions);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      document.removeEventListener("keyup", handleKeyUp);
+      document.removeEventListener("contextmenu", preventActions);
+      document.removeEventListener("copy", preventActions);
+      document.removeEventListener("cut", preventActions);
+      document.removeEventListener("paste", preventActions);
+    };
+  }, [readOnly]);
 
   const loadQuiz = async () => {
     try {
@@ -164,7 +222,7 @@ export default function QuizPlayPage() {
   const q = questions[page]
 
   return (
-    <div className="min-h-screen bg-gray-100">
+    <div className="min-h-screen bg-gray-100 select-none" onContextMenu={(e) => e.preventDefault()}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
         {/* Back Button for Instructors / View Mode */}
@@ -179,6 +237,11 @@ export default function QuizPlayPage() {
         )}
 
         <Card className="p-8">
+          {!readOnly && (
+            <div className="bg-yellow-50 border-l-4 border-yellow-400 p-3 mb-6 text-sm text-yellow-800">
+              <p>⚠️ <strong>Warning:</strong> Anti-Cheat Enabled. Do not switch tabs, minimize the browser, or try to copy text. The quiz will <strong>auto-submit</strong> immediately.</p>
+            </div>
+          )}
 
           {/* ===== TITLE ROW (NOT A HEADER) ===== */}
           <div className="flex items-start justify-between mb-6">

@@ -61,6 +61,7 @@ public class UserService {
         user.setName(request.getName());
         user.setPhone(request.getPhone());
         user.setBio(request.getBio());
+        user.setSkills(request.getSkills());
 
         user = userRepository.save(user);
         return mapToUserResponse(user);
@@ -167,6 +168,7 @@ public class UserService {
                 .role(user.getRole())
                 .phone(user.getPhone())
                 .bio(user.getBio())
+                .skills(user.getSkills())
                 .profileImage(user.getProfileImage())
                 .bannerImage(user.getBannerImage())
                 .isActive(user.getIsActive())

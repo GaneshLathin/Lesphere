@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Star, User, MessageSquare } from 'lucide-react';
 import { reviewService } from '../../services/reviewService';
 import Button from '../common/Button';
 import toast from 'react-hot-toast';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 const ReviewSection = ({ courseId, user, isEnrolled }) => {
     const [reviews, setReviews] = useState([]);
@@ -13,6 +14,7 @@ const ReviewSection = ({ courseId, user, isEnrolled }) => {
     const [rating, setRating] = useState(5);
     const [comment, setComment] = useState('');
     const [submitting, setSubmitting] = useState(false);
+    const [editingReviewId, setEditingReviewId] = useState(null);
 
     useEffect(() => {
         fetchReviews();
@@ -26,6 +28,40 @@ const ReviewSection = ({ courseId, user, isEnrolled }) => {
             console.error("Failed to load reviews", err);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const hasUserReviewed = reviews.some(r => r.studentId == user?.studentId);
+    const userReview = reviews.find(r => r.studentId == user?.studentId);
+
+    const handleEditClick = () => {
+        if (userReview) {
+            setRating(userReview.rating);
+            setComment(userReview.comment);
+            setEditingReviewId(userReview.id);
+            setShowForm(true);
+        }
+    };
+
+    const handleDelete = async () => {
+        if (!confirm("Are you sure you want to delete your review?")) return;
+
+        setSubmitting(true);
+        try {
+            if (userReview) {
+                await reviewService.deleteReview(userReview.id);
+                toast.success("Review deleted");
+                setRating(5);
+                setComment('');
+                setEditingReviewId(null);
+                setShowForm(false);
+                fetchReviews();
+            }
+        } catch (err) {
+            console.error("Delete failed", err);
+            toast.error("Failed to delete review");
+        } finally {
+            setSubmitting(false);
         }
     };
 
@@ -47,11 +83,18 @@ const ReviewSection = ({ courseId, user, isEnrolled }) => {
                 comment
             };
 
-            await reviewService.addReview(payload);
-            toast.success("Review submitted!");
+            if (editingReviewId) {
+                await reviewService.updateReview(editingReviewId, payload);
+                toast.success("Review updated!");
+            } else {
+                await reviewService.addReview(payload);
+                toast.success("Review submitted!");
+            }
+
             setShowForm(false);
             setComment('');
             setRating(5);
+            setEditingReviewId(null);
             fetchReviews(); // Refresh list
         } catch (err) {
             console.error("Submit review failed", err);
@@ -61,7 +104,14 @@ const ReviewSection = ({ courseId, user, isEnrolled }) => {
         }
     };
 
-    const hasUserReviewed = reviews.some(r => r.studentId === user?.studentId);
+    // Calculate rating distribution for Bar Chart
+    const chartData = useMemo(() => {
+        const counts = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+        reviews.forEach(r => {
+            if (counts[r.rating] !== undefined) counts[r.rating]++;
+        });
+        return Object.entries(counts).map(([star, count]) => ({ name: `${star} ★`, count }));
+    }, [reviews]);
 
     return (
         <div className="bg-white rounded-xl border border-gray-200 p-6 md:p-8 mt-8">
@@ -71,18 +121,42 @@ const ReviewSection = ({ courseId, user, isEnrolled }) => {
                     Student Reviews ({reviews.length})
                 </h2>
 
-                {/* Write Review Button - Only if Student, Enrolled, and Validation Check */}
-                {user?.role === 'STUDENT' && isEnrolled && !hasUserReviewed && !showForm && (
-                    <Button onClick={() => setShowForm(true)} size="sm">
-                        Write a Review
+                {/* Write Review Button - Only if Student, Enrolled (Removed !hasUserReviewed to allow editing/viewing) */}
+                {user?.role === 'STUDENT' && isEnrolled && !showForm && (
+                    <Button onClick={hasUserReviewed ? handleEditClick : () => {
+                        setEditingReviewId(null);
+                        setRating(5);
+                        setComment('');
+                        setShowForm(true);
+                    }} size="sm">
+                        {hasUserReviewed ? 'Edit Your Review' : 'Write a Review'}
                     </Button>
                 )}
             </div>
 
+            {/* Review Trend Chart (Bar Chart) */}
+            {reviews.length > 0 && (
+                <div className="mb-6 p-3 bg-gray-50 rounded-lg border border-gray-100 flex items-center gap-4">
+                    <div className="flex-1">
+                        <p className="text-sm font-semibold text-gray-600 mb-1">Rating Distribution</p>
+                        <div className="flex items-end gap-1 h-32 w-full max-w-xs">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={chartData} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
+                                    <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#6b7280' }} axisLine={false} tickLine={false} />
+                                    <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: '#6b7280' }} axisLine={false} tickLine={false} width={20} />
+                                    <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ borderRadius: '8px', fontSize: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+                                    <Bar dataKey="count" fill="#6366f1" radius={[4, 4, 0, 0]} barSize={20} />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Review Form */}
             {showForm && (
                 <form onSubmit={handleSubmit} className="bg-gray-50 p-4 rounded-lg mb-6 border border-gray-200 animate-in fade-in slide-in-from-top-2">
-                    <h3 className="font-semibold text-gray-800 mb-3">Write your review</h3>
+                    <h3 className="font-semibold text-gray-800 mb-3">{editingReviewId ? 'Edit your review' : 'Write your review'}</h3>
 
                     <div className="mb-4">
                         <label className="block text-sm font-medium text-gray-700 mb-1">Rating</label>
@@ -113,11 +187,16 @@ const ReviewSection = ({ courseId, user, isEnrolled }) => {
                     </div>
 
                     <div className="flex gap-2 justify-end">
+                        {editingReviewId && (
+                            <Button variant="danger" type="button" onClick={handleDelete} disabled={submitting} className="mr-auto">
+                                Delete
+                            </Button>
+                        )}
                         <Button variant="outline" type="button" onClick={() => setShowForm(false)} disabled={submitting}>
                             Cancel
                         </Button>
                         <Button type="submit" disabled={submitting}>
-                            {submitting ? 'Submitting...' : 'Post Review'}
+                            {submitting ? 'Saving...' : (editingReviewId ? 'Update Review' : 'Post Review')}
                         </Button>
                     </div>
                 </form>

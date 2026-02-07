@@ -27,4 +27,20 @@ public class ReviewService {
         }
         return reviewRepository.save(review);
     }
+
+    public Review updateReview(Long id, Review updatedReview) {
+        Review existing = reviewRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Review not found"));
+        
+        existing.setRating(updatedReview.getRating());
+        existing.setComment(updatedReview.getComment());
+        return reviewRepository.save(existing);
+    }
+
+    public void deleteReview(Long id) {
+        if (!reviewRepository.existsById(id)) {
+            throw new RuntimeException("Review not found");
+        }
+        reviewRepository.deleteById(id);
+    }
 }
