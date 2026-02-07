@@ -146,17 +146,17 @@ function App() {
           />
 
           <Route
-            path="/courses/:id"
-            element={<CourseDetail />}
-          />
-
-          <Route
             path="/courses/create"
             element={
               <PrivateRoute roles={['INSTRUCTOR']}>
                 <CreateCourse />
               </PrivateRoute>
             }
+          />
+
+          <Route
+            path="/courses/:id"
+            element={<CourseDetail />}
           />
 
           <Route

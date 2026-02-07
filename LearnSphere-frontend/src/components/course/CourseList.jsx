@@ -970,7 +970,6 @@ import Loader from "../common/Loader";
 import Button from "../common/Button";
 import Input from "../common/Input";
 import toast from "react-hot-toast";
-import CreateCourseModal from "./CreateCourseModal";
 import KanbanView from "./KanbanView";
 
 // Hybrid CourseList — merges your feature-rich logic with teammate's stable card layout
@@ -1015,7 +1014,6 @@ const CourseList = () => {
   // UI helpers
   const [loadingLocal, setLoadingLocal] = useState(false);
   const [viewMode, setViewMode] = useState("grid");
-  const [showCreateModal, setShowCreateModal] = useState(false);
 
   // reset page on filters change
   useEffect(() => {
@@ -1357,7 +1355,7 @@ const CourseList = () => {
           </button>
 
           {isInstructor && (
-            <Button onClick={() => setShowCreateModal(true)} variant="primary" icon={Plus}>
+            <Button onClick={() => navigate("/courses/create")} variant="primary" icon={Plus}>
               Create Course
             </Button>
           )}
@@ -1795,11 +1793,7 @@ const CourseList = () => {
         </div>
       )}
 
-      {/* CREATE COURSE MODAL */}
-      <CreateCourseModal
-        isOpen={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
-      />
+
     </div>
   );
 };

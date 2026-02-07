@@ -26,8 +26,11 @@ const CertificateDownload = ({ courseId, isCompleted, studentId }) => {
             const cert = genResponse.data
             return cert.uid
         } catch (err) {
-            console.error(err)
-            toast.error('Failed to generate certificate.')
+            console.error('Certificate generation error:', err)
+            // Extract error message from backend response
+            const errorMessage = err.response?.data?.error || err.response?.data?.message || 'Failed to generate certificate.'
+            console.log('Backend error message:', errorMessage)
+            toast.error(errorMessage)
             throw err
         } finally {
             setGenerating(false)

@@ -17,22 +17,32 @@ public class CertificateController {
 
     // Secured Endpoint (add security annotations as needed, e.g. @PreAuthorize)
     @PostMapping("/generate/{courseId}")
-    public ResponseEntity<com.example.skillforge.model.dto.CertificateResponseDTO> generateCertificate(
+    public ResponseEntity<?> generateCertificate(
             @PathVariable Long courseId,
             @RequestParam Long studentId) {
 
-        Certificate cert = certificateService.generateCertificate(studentId, courseId);
+        try {
+            Certificate cert = certificateService.generateCertificate(studentId, courseId);
 
-        com.example.skillforge.model.dto.CertificateResponseDTO dto = com.example.skillforge.model.dto.CertificateResponseDTO
-                .builder()
-                .uid(cert.getUid())
-                .studentName(cert.getStudentNameSnapshot())
-                .courseName(cert.getCourseNameSnapshot())
-                .issuedAt(cert.getIssuedAt())
-                .pdfUrl(cert.getPdfUrl())
-                .build();
+            com.example.skillforge.model.dto.CertificateResponseDTO dto = com.example.skillforge.model.dto.CertificateResponseDTO
+                    .builder()
+                    .uid(cert.getUid())
+                    .studentName(cert.getStudentNameSnapshot())
+                    .courseName(cert.getCourseNameSnapshot())
+                    .issuedAt(cert.getIssuedAt())
+                    .pdfUrl(cert.getPdfUrl())
+                    .build();
 
-        return ResponseEntity.ok(dto);
+            return ResponseEntity.ok(dto);
+        } catch (RuntimeException e) {
+            // Return error message to frontend
+            return ResponseEntity.badRequest()
+                    .body(java.util.Map.of(
+                            "error", e.getMessage(),
+                            "courseId", courseId,
+                            "studentId", studentId
+                    ));
+        }
     }
 
     // Secured Endpoint
