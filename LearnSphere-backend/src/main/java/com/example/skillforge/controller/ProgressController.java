@@ -56,6 +56,20 @@ public class ProgressController {
     @GetMapping("/student/{studentId}")
     public ResponseEntity<?> getProgressForStudent(@PathVariable Long studentId) {
         List<CourseProgress> cps = courseProgressRepository.findByStudentId(studentId);
+
+        // Force recalculation for each course to ensure accuracy
+        for (CourseProgress cp : cps) {
+            try {
+                courseProgressService.updateProgress(studentId, cp.getCourseId(), null);
+            } catch (Exception e) {
+                System.err.println(
+                        "Failed to auto-recalculate progress for course " + cp.getCourseId() + ": " + e.getMessage());
+            }
+        }
+
+        // Re-fetch to get updated values
+        cps = courseProgressRepository.findByStudentId(studentId);
+
         List<ProgressResponse> resp = new ArrayList<>();
 
         for (CourseProgress cp : cps) {
@@ -146,11 +160,13 @@ public class ProgressController {
     }
 
     @PostMapping("/material/complete")
-    public ResponseEntity<ApiResponse<com.example.skillforge.model.entity.TopicMaterialProgress>> completeMaterial(@RequestBody MaterialCompleteRequest req) {
+    public ResponseEntity<ApiResponse<com.example.skillforge.model.entity.TopicMaterialProgress>> completeMaterial(
+            @RequestBody MaterialCompleteRequest req) {
         if (req.getStudentId() == null || req.getMaterialId() == null) {
             return ResponseEntity.badRequest().body(ApiResponse.error("studentId and materialId are required"));
         }
-        com.example.skillforge.model.entity.TopicMaterialProgress tmp = topicProgressService.markMaterialCompleted(req.getStudentId(), req.getMaterialId());
+        com.example.skillforge.model.entity.TopicMaterialProgress tmp = topicProgressService
+                .markMaterialCompleted(req.getStudentId(), req.getMaterialId());
         return ResponseEntity.ok(ApiResponse.success("Material completed", tmp));
     }
 
@@ -162,7 +178,8 @@ public class ProgressController {
 
     @GetMapping("/student/{studentId}/materials")
     public ResponseEntity<ApiResponse<List<Long>>> getCompletedMaterials(@PathVariable Long studentId) {
-        List<com.example.skillforge.model.entity.TopicMaterialProgress> list = topicProgressService.getMaterialProgressForStudent(studentId);
+        List<com.example.skillforge.model.entity.TopicMaterialProgress> list = topicProgressService
+                .getMaterialProgressForStudent(studentId);
         List<Long> completedIds = list.stream()
                 .filter(p -> Boolean.TRUE.equals(p.getCompleted()))
                 .map(com.example.skillforge.model.entity.TopicMaterialProgress::getMaterialId)

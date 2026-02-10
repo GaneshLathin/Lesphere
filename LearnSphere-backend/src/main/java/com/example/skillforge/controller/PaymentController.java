@@ -10,6 +10,7 @@ import com.example.skillforge.service.PaymentService;
 import com.razorpay.Order;
 import com.razorpay.RazorpayException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -27,6 +28,9 @@ public class PaymentController {
     private final CourseRepository courseRepository;
     private final EnrollmentRepository enrollmentRepository;
 
+    @Value("${razorpay.key_id}")
+    private String keyId;
+
     @PostMapping("/create-order")
     public ResponseEntity<?> createOrder(@RequestParam Long courseId) {
         try {
@@ -43,8 +47,8 @@ public class PaymentController {
             response.put("id", order.get("id"));
             response.put("amount", order.get("amount"));
             response.put("currency", order.get("currency"));
-            response.put("key", System.getenv("RAZORPAY_KEY_ID")); // Should be sent from backend to avoid exposure?
-            // Actually it's public key, safe to send. But let's verify if 'key' is needed
+            response.put("key", keyId); // Send the injected key from properties
+            // actually it's public key, safe to send. But let's verify if 'key' is needed
             // here,
             // usually frontend has key. We'll send it for convenience or let frontend env
             // handle it.

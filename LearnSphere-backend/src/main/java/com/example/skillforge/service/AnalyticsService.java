@@ -1,7 +1,6 @@
 package com.example.skillforge.service;
 
 import com.example.skillforge.model.dto.analytics.AnalyticsDTO;
-import com.example.skillforge.model.entity.User;
 import com.example.skillforge.model.enums.Role;
 import com.example.skillforge.repository.EnrollmentRepository;
 import com.example.skillforge.repository.QuizAttemptRepository;

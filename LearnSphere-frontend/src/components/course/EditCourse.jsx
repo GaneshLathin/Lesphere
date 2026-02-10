@@ -14,7 +14,7 @@ import toast from 'react-hot-toast'
 // Tab Components
 import CourseEditTabs from './tabs/CourseEditTabs'
 import BasicInfoTab from './tabs/BasicInfoTab'
-
+import ContentTab from './tabs/ContentTab'
 import OptionsTab from './tabs/OptionsTab'
 import { userService } from '../../services/userService'
 
@@ -132,19 +132,28 @@ const EditCourse = () => {
 
     // Validate price if access rule is ON_PAYMENT
     if (formData.accessRule === 'ON_PAYMENT') {
-      if (!formData.price || formData.price <= 0) {
+      if (!formData.price || Number(formData.price) <= 0) {
         toast.error('Price is required and must be greater than 0 when Access Rule is "On Payment"')
         return
       }
     }
 
     try {
+      // Explicitly construct payload to avoid "Object value" deserialization errors
+      // and ensure types are correct (Double for price, Integer for duration)
       const payload = {
-        ...formData,
+        title: formData.title,
+        description: formData.description,
+        difficultyLevel: formData.difficultyLevel,
         duration: Number(formData.duration) || 0,
-        // Ensure category is not empty
+        thumbnailUrl: formData.thumbnailUrl,
         category: formData.category || 'General',
-        // Ensure other fields are correctly formatted
+        tags: formData.tags,
+        courseAdminUserId: formData.courseAdminUserId ? Number(formData.courseAdminUserId) : null,
+        visibility: formData.visibility,
+        accessRule: formData.accessRule,
+        price: (formData.price === '' || formData.price === null) ? null : Number(formData.price),
+        isPublished: course?.isPublished || false
       }
 
       console.log('Submitting payload:', payload)
@@ -275,7 +284,9 @@ const EditCourse = () => {
           />
         )}
 
-
+        {activeTab === 'content' && (
+          <ContentTab courseId={id} />
+        )}
 
         {activeTab === 'options' && (
           <OptionsTab

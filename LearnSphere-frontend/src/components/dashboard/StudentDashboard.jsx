@@ -29,6 +29,7 @@ import Modal from "../common/Modal";
 import DashboardOverview from "./DashboardOverview";
 import toast from "react-hot-toast";
 import ProgressTracker from "../progress/ProgressTracker";
+import ChatBot from "../common/ChatBot";
 
 export default function StudentDashboard() {
   const navigate = useNavigate();
@@ -414,7 +415,7 @@ export default function StudentDashboard() {
 
       {/* Comprehensive Dashboard Overview - Performance across all activities */}
       <div className="mb-10">
-        <DashboardOverview />
+        <DashboardOverview user={user} courses={enrollments} />
       </div>
 
       {/* Progress Section */}
@@ -654,6 +655,7 @@ export default function StudentDashboard() {
           </div>
         </div>
       </Modal>
+      <ChatBot />
     </div>
   );
 }

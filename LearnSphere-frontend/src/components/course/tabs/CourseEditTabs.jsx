@@ -3,6 +3,7 @@ import React from 'react'
 const CourseEditTabs = ({ activeTab, setActiveTab }) => {
     const tabs = [
         { id: 'basic', label: 'Basic Info' },
+        { id: 'content', label: 'Content' },
         { id: 'options', label: 'Options/Settings' },
     ]
 

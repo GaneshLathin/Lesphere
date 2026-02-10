@@ -306,6 +306,28 @@ public class QuizAttemptService {
 
         // --- GAMIFICATION: AWARD POINTS ---
         if ("PASSED".equals(savedAttempt.getStatus())) {
+
+            // 🔥 FIXED BUG: Mark TopicQuizProgress as completed if passed
+            // This ensures overall course progress sees the quiz as done.
+            if (topicId != null) {
+                TopicQuizProgress tqp = topicQuizProgressRepository
+                        .findByStudentIdAndTopicId(studentId, topicId)
+                        .orElseGet(() -> {
+                            TopicQuizProgress t = new TopicQuizProgress();
+                            t.setStudentId(studentId);
+                            t.setTopicId(topicId);
+                            return t;
+                        });
+
+                if (!Boolean.TRUE.equals(tqp.getCompleted())) {
+                    tqp.setCompleted(true);
+                    tqp.setCompletedAt(LocalDateTime.now());
+                    tqp.setScore(scorePercent);
+                    topicQuizProgressRepository.save(tqp);
+                    System.out.println("DEBUG: Marked TopicQuiz for Topic " + topicId + " as COMPLETED.");
+                }
+            }
+
             // Check if student already passed this quiz previously
             List<QuizAttempt> previousAttempts = attemptRepository.findByQuizIdAndStudentId(quizId, studentId);
             boolean alreadyPassed = previousAttempts.stream()

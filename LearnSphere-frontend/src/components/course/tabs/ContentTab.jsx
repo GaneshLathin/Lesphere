@@ -1,17 +1,21 @@
 import React, { useState, useEffect } from 'react'
 import Card from '../../common/Card'
 import Button from '../../common/Button'
-import { Plus, Edit, Trash2, ChevronDown, ChevronUp, GripVertical, FileText, Video, Image as ImageIcon, Link as LinkIcon, MoreVertical } from 'lucide-react'
+import { Plus, Edit, Trash2, ChevronDown, ChevronUp, GripVertical, FileText, Video, Image as ImageIcon, Link as LinkIcon, MoreVertical, Award, Sparkles } from 'lucide-react'
 import TopicModal from './TopicModal'
 import LessonEditorModal from './LessonEditorModal'
 import ConfirmModal from '../../common/ConfirmModal'
 import { topicService } from '../../../services/topicService'
 import { materialService } from '../../../services/materialService'
+import { quizService } from '../../../services/quizService'
 import toast from 'react-hot-toast'
+import { useNavigate } from 'react-router-dom'
 
 const ContentTab = ({ courseId }) => {
+    const navigate = useNavigate()
     const [topics, setTopics] = useState([])
     const [materials, setMaterials] = useState({}) // { topicId: [materials] }
+    const [quizzes, setQuizzes] = useState({}) // { topicId: quiz }
     const [loading, setLoading] = useState(true)
     const [expandedTopic, setExpandedTopic] = useState(null)
 
@@ -46,14 +50,26 @@ const ContentTab = ({ courseId }) => {
             const fetchedTopics = response.data.data || response.data
             setTopics(fetchedTopics)
 
-            // Initial load of materials for all topics (or just expanded ones? Loading all for now for search/overview)
-            // Ideally we load when expanded, but for "Edit" view, loading all is often better UX for reordering.
+            // Initial load of materials and quizzes for all topics
             const materialsMap = {}
+            const quizzesMap = {}
             await Promise.all(fetchedTopics.map(async (topic) => {
                 const matRes = await materialService.getMaterialsByTopic(topic.id)
                 materialsMap[topic.id] = matRes.data.data || matRes.data
+
+                // Fetch quiz for this topic
+                try {
+                    const quizRes = await quizService.getQuizByTopic(topic.id)
+                    const quiz = quizRes?.data?.data || quizRes?.data
+                    if (quiz && quiz.id) {
+                        quizzesMap[topic.id] = quiz
+                    }
+                } catch (err) {
+                    // No quiz for this topic, that's okay
+                }
             }))
             setMaterials(materialsMap)
+            setQuizzes(quizzesMap)
 
         } catch (error) {
             console.error("Failed to fetch topics", error)
@@ -70,6 +86,28 @@ const ContentTab = ({ courseId }) => {
                 ...prev,
                 [topicId]: res.data.data || res.data
             }))
+
+            // Also fetch quiz
+            try {
+                const quizRes = await quizService.getQuizByTopic(topicId)
+                const quiz = quizRes?.data?.data || quizRes?.data
+                if (quiz && quiz.id) {
+                    setQuizzes(prev => ({ ...prev, [topicId]: quiz }))
+                } else {
+                    setQuizzes(prev => {
+                        const newQuizzes = { ...prev }
+                        delete newQuizzes[topicId]
+                        return newQuizzes
+                    })
+                }
+            } catch (err) {
+                // No quiz
+                setQuizzes(prev => {
+                    const newQuizzes = { ...prev }
+                    delete newQuizzes[topicId]
+                    return newQuizzes
+                })
+            }
         } catch (error) {
             console.error("Failed to fetch materials", error)
         }
@@ -213,12 +251,43 @@ const ContentTab = ({ courseId }) => {
                 await materialService.deleteMaterial(confirmModal.id)
                 toast.success('Lesson deleted')
                 fetchMaterials(confirmModal.parentId)
+            } else if (confirmModal.type === 'QUIZ') {
+                await quizService.deleteQuiz(confirmModal.id)
+                toast.success('Quiz deleted')
+                fetchMaterials(confirmModal.parentId)
             }
             setConfirmModal({ ...confirmModal, isOpen: false })
         } catch (error) {
             console.error(error)
             toast.error('Failed to delete item')
         }
+    }
+
+    // --- Quiz Handlers ---
+    const handleAddQuizAI = (topicId) => {
+        navigate(`/quiz/ai-generate/${courseId}/${topicId}`)
+    }
+
+    const handleAddQuizManual = (topicId) => {
+        navigate(`/quiz/create/${courseId}/${topicId}`)
+    }
+
+    const handleEditQuiz = (quiz, topicId) => {
+        navigate(`/quiz/edit/${quiz.id}`, {
+            state: { quiz, topicId, courseId }
+        })
+    }
+
+    const confirmDeleteQuiz = (quiz, topicId) => {
+        setConfirmModal({
+            isOpen: true,
+            type: 'QUIZ',
+            id: quiz.id,
+            parentId: topicId,
+            title: `Delete Quiz "${quiz.title}"?`,
+            message: 'Are you sure you want to delete this quiz? This cannot be undone.'
+        })
+        setActiveMenu(null)
     }
 
     const toggleTopic = (id) => {
@@ -339,15 +408,117 @@ const ContentTab = ({ courseId }) => {
                                     ))
                                 )}
 
-                                <Button
-                                    onClick={() => handleAddLesson(topic.id)}
-                                    variant="outline"
-                                    className="w-full mt-2 border-dashed"
-                                    size="sm"
-                                    icon={Plus}
-                                >
-                                    Add Content
-                                </Button>
+                                {/* Quiz Section */}
+                                {quizzes[topic.id] && (
+                                    <div className="mt-4 pt-4 border-t border-purple-100">
+                                        <h4 className="text-sm font-semibold text-purple-700 mb-3 flex items-center gap-2">
+                                            <Award size={16} />
+                                            Quiz Assessment
+                                        </h4>
+                                        <div className="flex items-center justify-between p-3 border border-purple-100 rounded-lg bg-gradient-to-r from-purple-50 to-indigo-50 hover:border-purple-200 hover:shadow-sm transition-all group relative">
+                                            <div className="flex items-center gap-3">
+                                                <div className="p-2 bg-purple-100 rounded">
+                                                    <Award size={18} className="text-purple-600" />
+                                                </div>
+                                                <div>
+                                                    <p className="text-sm font-medium text-gray-900">{quizzes[topic.id].title}</p>
+                                                    <p className="text-xs text-gray-500">
+                                                        {quizzes[topic.id].duration} min • {quizzes[topic.id].questions?.length || 0} questions
+                                                    </p>
+                                                </div>
+                                            </div>
+
+                                            {/* Quiz Actions */}
+                                            <div className="relative">
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); setActiveMenu(activeMenu === `quiz-${quizzes[topic.id].id}` ? null : `quiz-${quizzes[topic.id].id}`); }}
+                                                    className="p-1.5 rounded-full hover:bg-purple-100 text-purple-600"
+                                                >
+                                                    <MoreVertical size={16} />
+                                                </button>
+
+                                                {/* Quiz 3-Dot Dropdown */}
+                                                {activeMenu === `quiz-${quizzes[topic.id].id}` && (
+                                                    <div className="absolute right-0 top-full mt-1 w-32 bg-white rounded-lg shadow-xl border border-gray-100 z-10 py-1 action-menu">
+                                                        <button
+                                                            onClick={() => handleEditQuiz(quizzes[topic.id], topic.id)}
+                                                            className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left"
+                                                        >
+                                                            <Edit size={14} className="mr-2" />
+                                                            Edit
+                                                        </button>
+                                                        <button
+                                                            onClick={() => confirmDeleteQuiz(quizzes[topic.id], topic.id)}
+                                                            className="flex items-center w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 text-left"
+                                                        >
+                                                            <Trash2 size={14} className="mr-2" />
+                                                            Delete
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div className="flex gap-2 mt-3">
+                                    <Button
+                                        onClick={() => handleAddLesson(topic.id)}
+                                        variant="outline"
+                                        className="flex-1 border-dashed"
+                                        size="sm"
+                                        icon={Plus}
+                                    >
+                                        Add Content
+                                    </Button>
+
+                                    {/* Add Quiz Button with Dropdown */}
+                                    {!quizzes[topic.id] && (
+                                        <div className="relative flex-1">
+                                            <Button
+                                                onClick={() => setActiveMenu(activeMenu === `add-quiz-${topic.id}` ? null : `add-quiz-${topic.id}`)}
+                                                variant="outline"
+                                                className="w-full border-dashed border-purple-300 text-purple-600 hover:bg-purple-50"
+                                                size="sm"
+                                                icon={Award}
+                                            >
+                                                Add Quiz
+                                            </Button>
+
+                                            {/* Quiz Options Dropdown */}
+                                            {activeMenu === `add-quiz-${topic.id}` && (
+                                                <div className="absolute left-0 top-full mt-2 w-full bg-white rounded-lg shadow-xl border border-gray-100 z-20 overflow-hidden">
+                                                    <button
+                                                        onClick={() => {
+                                                            handleAddQuizAI(topic.id)
+                                                            setActiveMenu(null)
+                                                        }}
+                                                        className="w-full text-left px-4 py-3 hover:bg-purple-50 text-sm text-gray-700 flex items-center gap-3 transition-colors border-b border-gray-100"
+                                                    >
+                                                        <Sparkles size={16} className="text-purple-600" />
+                                                        <div>
+                                                            <div className="font-medium">AI Quiz Generator</div>
+                                                            <div className="text-xs text-gray-500">Auto-generate from content</div>
+                                                        </div>
+                                                    </button>
+                                                    <button
+                                                        onClick={() => {
+                                                            handleAddQuizManual(topic.id)
+                                                            setActiveMenu(null)
+                                                        }}
+                                                        className="w-full text-left px-4 py-3 hover:bg-purple-50 text-sm text-gray-700 flex items-center gap-3 transition-colors"
+                                                    >
+                                                        <Edit size={16} className="text-purple-600" />
+                                                        <div>
+                                                            <div className="font-medium">Manual Quiz Builder</div>
+                                                            <div className="text-xs text-gray-500">Create questions manually</div>
+                                                        </div>
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         )}
                     </Card>

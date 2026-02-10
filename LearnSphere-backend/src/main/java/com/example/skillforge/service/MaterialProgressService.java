@@ -13,6 +13,8 @@ import java.time.LocalDateTime;
 public class MaterialProgressService {
 
     private final TopicMaterialProgressRepository materialProgressRepository;
+    private final com.example.skillforge.repository.MaterialRepository materialRepository;
+    private final CourseProgressService courseProgressService;
 
     @Transactional
     public TopicMaterialProgress markMaterialCompleted(Long studentId, Long materialId) {
@@ -27,7 +29,18 @@ public class MaterialProgressService {
 
         mp.setCompleted(true);
         mp.setCompletedAt(LocalDateTime.now());
-        return materialProgressRepository.save(mp);
+        TopicMaterialProgress saved = materialProgressRepository.save(mp);
+
+        // Trigger Course Progress Update
+        materialRepository.findById(materialId).ifPresent(material -> {
+            if (material.getTopic() != null && material.getTopic().getCourse() != null) {
+                Long topicId = material.getTopic().getId();
+                Long courseId = material.getTopic().getCourse().getId();
+                courseProgressService.updateProgress(studentId, courseId, topicId);
+            }
+        });
+
+        return saved;
     }
 
     public boolean hasCompletedAnyMaterialInTopic(Long studentId, java.util.List<Long> materialIds) {

@@ -768,22 +768,35 @@
 //     </div>
 //   );
 // };
-
-// export default MaterialViewer;
-
-
-// src/components/material/MaterialViewer.jsx
-import React, { useEffect, useRef, useState } from "react";
-import {
-  X, Play, Pause, Volume2, VolumeX,
-  Maximize, Download, ExternalLink,
-  FileText, AlertCircle
-} from "lucide-react";
-import Button from "../common/Button";
-import { materialProgressService } from "../../services/materialProgressService";
-import api from "../../services/api";
+import React, { useState, useEffect, useRef } from "react";
 import { useSelector } from "react-redux";
+import {
+  X,
+  Play,
+  Pause,
+  Volume2,
+  VolumeX,
+  Maximize,
+  Download,
+  ExternalLink,
+  AlertCircle,
+  Clock,
+  CheckCircle,
+  FileText,
+  Video,
+  Image as ImageIcon,
+  Link as LinkIcon,
+  Sparkles
+} from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import Button from "../common/Button";
+import api from "../../services/api";
 import toast from "react-hot-toast";
+import { fadeIn, scaleIn, slideInLeft } from "../../utils/animations";
+
+const TIME_REPORT_INTERVAL = 20;
+const COMPLETE_THRESHOLD = 0.85;
+const MIN_SECONDS_TO_REPORT = 5;
 
 const MaterialViewer = ({ material, topicId, onClose, onComplete }) => {
   const { user } = useSelector((state) => state.auth);
@@ -800,6 +813,59 @@ const MaterialViewer = ({ material, topicId, onClose, onComplete }) => {
 
   // PDF Viewer
   const [pdfViewMode, setPdfViewMode] = useState("google");
+
+  // ⏳ PDF/Text Timer State
+  const [pdfTimeLeft, setPdfTimeLeft] = useState(0);
+  const [isPdfTimerActive, setIsPdfTimerActive] = useState(false);
+
+  // Initialize Timer
+  useEffect(() => {
+    if ((material?.materialType === "PDF" || material?.materialType === "TEXT") && material.durationMinutes > 0) {
+      setPdfTimeLeft(material.durationMinutes * 60);
+      setIsPdfTimerActive(true);
+    } else {
+      setPdfTimeLeft(0);
+      setIsPdfTimerActive(false);
+    }
+  }, [material]);
+
+  // Timer Tick
+  useEffect(() => {
+    let interval;
+    if (isPdfTimerActive && pdfTimeLeft > 0) {
+      interval = setInterval(() => {
+        setPdfTimeLeft((prev) => {
+          if (prev <= 1) {
+            handlePdfComplete();
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [isPdfTimerActive, pdfTimeLeft]);
+
+  const handlePdfComplete = async () => {
+    setIsPdfTimerActive(false);
+    toast.success("Required reading time completed!");
+    try {
+      if (onComplete) onComplete(material.id);
+
+      if (user?.studentId || user?.userId) {
+        const idToUse = user.studentId || user.userId;
+        await import('../../services/materialProgressService').then(m => m.materialProgressService.markMaterialCompleted(idToUse, material.id));
+      }
+    } catch (err) {
+      console.error("Failed to mark PDF completed:", err);
+    }
+  };
+
+  const formatPdfTime = (seconds) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}m ${s}s`;
+  };
 
   if (!material) return null;
 
@@ -845,36 +911,38 @@ const MaterialViewer = ({ material, topicId, onClose, onComplete }) => {
 
       toast.success(`+${totalSeconds}s added`);
     } catch (err) {
-      console.error("Failed to send total time:", err);
+      console.error("Failed to add time:", err);
     }
   };
 
-  // Track max watched time to prevent skipping
-  const [maxWatchedTime, setMaxWatchedTime] = useState(0);
-
-  const handleLoadedMetadata = () => {
-    if (videoRef.current) setDuration(videoRef.current.duration);
+  // Video handlers
+  const handlePlayPause = () => {
+    if (!videoRef.current) return;
+    if (isPlaying) {
+      videoRef.current.pause();
+    } else {
+      videoRef.current.play();
+    }
+    setIsPlaying(!isPlaying);
   };
 
   const handleTimeUpdate = () => {
     if (videoRef.current) {
-      const currentTime = videoRef.current.currentTime;
-      setCurrentTime(currentTime);
-      if (currentTime > maxWatchedTime) {
-        setMaxWatchedTime(currentTime);
-      }
+      setCurrentTime(videoRef.current.currentTime);
     }
   };
 
-  const handlePlayPause = () => {
-    const v = videoRef.current;
-    if (!v) return;
-    if (v.paused) {
-      v.play();
-      setIsPlaying(true);
-    } else {
-      v.pause();
-      setIsPlaying(false);
+  const handleLoadedMetadata = () => {
+    if (videoRef.current) {
+      setDuration(videoRef.current.duration);
+    }
+  };
+
+  const handleSeek = (e) => {
+    const seekTime = (e.target.value / 100) * duration;
+    if (videoRef.current) {
+      videoRef.current.currentTime = seekTime;
+      setCurrentTime(seekTime);
     }
   };
 
@@ -884,243 +952,440 @@ const MaterialViewer = ({ material, topicId, onClose, onComplete }) => {
     setIsMuted(!isMuted);
   };
 
-  const handleSeek = (e) => {
-    const seekTime = (e.target.value / 100) * duration;
-    // Allow seeking only up to maxWatchedTime (plus a small buffer like 1s)
-    if (seekTime <= maxWatchedTime + 1) {
-      if (videoRef.current) videoRef.current.currentTime = seekTime;
-      setCurrentTime(seekTime);
-    } else {
-      // Prevent seeking forward
-      toast.error("You cannot skip ahead!");
-    }
-  };
-
   const handleFullscreen = () => {
-    if (videoRef.current?.requestFullscreen) videoRef.current.requestFullscreen();
-  };
-
-  const formatTime = (sec) => {
-    const m = Math.floor(sec / 60);
-    const s = Math.floor(sec % 60);
-    return `${m}:${s < 10 ? "0" : ""}${s}`;
+    if (videoRef.current?.requestFullscreen) {
+      videoRef.current.requestFullscreen();
+    }
   };
 
   const handleEnded = async () => {
-    console.log("Video ended", material.id);
     setIsPlaying(false);
-    // Mark as completed when video ends
+    toast.success("Video completed!");
     try {
-      if (onComplete) {
-        console.log("Calling onComplete callback");
-        onComplete(material.id);
-      }
-
+      if (onComplete) onComplete(material.id);
       if (user?.studentId || user?.userId) {
-        // Use studentId if available, fallback to userId
         const idToUse = user.studentId || user.userId;
         await import('../../services/materialProgressService').then(m => m.materialProgressService.markMaterialCompleted(idToUse, material.id));
-        toast.success("Lesson Completed!");
       }
     } catch (err) {
-      console.error("Failed to mark completed:", err);
-      toast.error("Failed to save progress");
+      console.error("Failed to mark video completed:", err);
     }
+  };
+
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
   };
 
   const handleDownload = () => {
     const link = document.createElement("a");
     link.href = getFileUrl();
     link.download = material.fileName || material.title;
+    link.target = "_blank";
+    document.body.appendChild(link);
     link.click();
+    document.body.removeChild(link);
   };
 
+  // Get material type icon and color
+  const getMaterialTypeInfo = () => {
+    switch (material.materialType) {
+      case "VIDEO":
+        return { icon: Video, color: "from-purple-500 to-pink-500", bg: "bg-purple-100" };
+      case "PDF":
+        return { icon: FileText, color: "from-blue-500 to-cyan-500", bg: "bg-blue-100" };
+      case "IMAGE":
+        return { icon: ImageIcon, color: "from-green-500 to-emerald-500", bg: "bg-green-100" };
+      case "LINK":
+        return { icon: LinkIcon, color: "from-orange-500 to-red-500", bg: "bg-orange-100" };
+      case "TEXT":
+        return { icon: FileText, color: "from-indigo-500 to-purple-500", bg: "bg-indigo-100" };
+      default:
+        return { icon: Sparkles, color: "from-gray-500 to-gray-600", bg: "bg-gray-100" };
+    }
+  };
+
+  const typeInfo = getMaterialTypeInfo();
+  const TypeIcon = typeInfo.icon;
+
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-90 z-50 flex items-center justify-center p-4">
-      <div className="w-full max-w-6xl max-h-[90vh] bg-white rounded-xl overflow-hidden shadow-xl">
-
-        {/* HEADER */}
-        <div className="flex justify-between items-center px-6 py-4 border-b">
-          <div>
-            <h2 className="text-xl font-bold">{material.title}</h2>
-            {material.description && (
-              <p className="text-sm text-gray-600">{material.description}</p>
-            )}
-          </div>
-          <button
-            onClick={() => {
-              sendTotalTimeAndClose();
-              onClose();
-            }}
-            className="p-2 hover:bg-gray-100 rounded-lg"
+    <AnimatePresence>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.3 }}
+        className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+        onClick={(e) => {
+          if (e.target === e.currentTarget) {
+            sendTotalTimeAndClose();
+            onClose();
+          }
+        }}
+      >
+        <motion.div
+          initial={{ scale: 0.9, opacity: 0, y: 20 }}
+          animate={{ scale: 1, opacity: 1, y: 0 }}
+          exit={{ scale: 0.9, opacity: 0, y: 20 }}
+          transition={{ type: "spring", duration: 0.5 }}
+          className="w-full max-w-6xl max-h-[95vh] overflow-hidden rounded-2xl shadow-2xl bg-white"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Enhanced Header */}
+          <motion.div
+            className={`bg-gradient-to-r ${typeInfo.color} px-6 py-5 flex items-center justify-between relative overflow-hidden`}
+            initial="hidden"
+            animate="visible"
+            variants={slideInLeft}
           >
-            <X size={24} />
-          </button>
-        </div>
-
-        {/* CONTENT */}
-        <div className="bg-white">
-
-          {/* VIDEO VIEWER */}
-          {material.materialType === "VIDEO" && (
-            <div className="relative bg-black">
-              <video
-                ref={videoRef}
-                className="w-full max-h-[70vh]"
-                src={getFileUrl()}
-                onLoadedMetadata={handleLoadedMetadata}
-                onTimeUpdate={handleTimeUpdate}
-                onEnded={handleEnded}
-                controls={false}
-              />
-
-              {/* CONTROLS */}
-              <div className="absolute bottom-0 w-full bg-gradient-to-t from-black to-transparent p-4">
-                {/* Seek Bar */}
-                <input
-                  type="range"
-                  min="0"
-                  max="100"
-                  value={duration ? (currentTime / duration) * 100 : 0}
-                  onChange={handleSeek}
-                  className="w-full"
-                />
-
-                {/* Buttons Row */}
-                <div className="flex items-center mt-2 space-x-4">
-                  <button onClick={handlePlayPause} className="text-white">
-                    {isPlaying ? <Pause /> : <Play />}
-                  </button>
-
-                  <button onClick={handleMuteToggle} className="text-white">
-                    {isMuted ? <VolumeX /> : <Volume2 />}
-                  </button>
-
-                  <div className="flex-1" />
-
-                  <button onClick={handleFullscreen} className="text-white">
-                    <Maximize />
-                  </button>
-                </div>
-              </div>
+            {/* Decorative background elements */}
+            <div className="absolute inset-0 opacity-10">
+              <div className="absolute top-0 right-0 w-64 h-64 bg-white rounded-full blur-3xl transform translate-x-32 -translate-y-32"></div>
+              <div className="absolute bottom-0 left-0 w-48 h-48 bg-white rounded-full blur-3xl transform -translate-x-24 translate-y-24"></div>
             </div>
-          )}
 
-          {/* PDF VIEWER */}
-          {material.materialType === "PDF" && (
-            <>
-              <div className="p-3 bg-blue-50 flex justify-between border-b">
-                <span className="text-blue-700 flex items-center gap-2">
-                  <AlertCircle size={16} /> Viewer Mode:
-                </span>
-
-                <div className="space-x-2">
-                  <button
-                    onClick={() => setPdfViewMode("google")}
-                    className={`px-3 py-1 text-sm rounded ${pdfViewMode === "google"
-                      ? "bg-blue-600 text-white"
-                      : "border border-blue-300"
-                      }`}
-                  >
-                    Google
-                  </button>
-
-                  <button
-                    onClick={() => setPdfViewMode("mozilla")}
-                    className={`px-3 py-1 text-sm rounded ${pdfViewMode === "mozilla"
-                      ? "bg-blue-600 text-white"
-                      : "border border-blue-300"
-                      }`}
-                  >
-                    Mozilla
-                  </button>
-                </div>
+            <div className="flex-1 mr-4 relative z-10">
+              <div className="flex items-center gap-3 mb-2">
+                <motion.div
+                  className={`${typeInfo.bg} p-2 rounded-lg`}
+                  whileHover={{ scale: 1.1, rotate: 5 }}
+                  transition={{ type: "spring", stiffness: 300 }}
+                >
+                  <TypeIcon size={24} className="text-white" />
+                </motion.div>
+                <motion.h2
+                  className="text-2xl font-bold text-white drop-shadow-lg"
+                  variants={fadeIn}
+                >
+                  {material.title}
+                </motion.h2>
               </div>
-
-              <iframe
-                src={getPdfViewUrl()}
-                className="w-full h-[70vh]"
-                title="PDF Viewer"
-              />
-            </>
-          )}
-
-          {/* LINK VIEWER */}
-          {material.materialType === "LINK" && (
-            <div className="p-6">
-              <a
-                href={getFileUrl()}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="bg-blue-600 text-white px-4 py-2 rounded flex items-center space-x-2"
-              >
-                <span>Open Link</span>
-                <ExternalLink size={16} />
-              </a>
-
-              <iframe
-                src={getFileUrl()}
-                className="w-full h-[70vh] mt-4 border"
-                title="External Link"
-              />
-            </div>
-          )}
-
-          {/* IMAGE VIEWER */}
-          {material.materialType === "IMAGE" && (
-            <div className="p-6 bg-gray-50 flex items-center justify-center">
-              <div className="max-w-full max-h-[70vh] overflow-auto">
-                <img
-                  src={getFileUrl()}
-                  alt={material.title}
-                  className="max-w-full h-auto rounded-lg shadow-lg"
-                />
-              </div>
-            </div>
-          )}
-
-          {/* TEXT VIEWER */}
-          {material.materialType === "TEXT" && (
-            <div className="p-6 bg-gray-50">
-              <div className="prose max-w-none bg-white p-6 rounded-lg shadow-sm">
-                <pre className="whitespace-pre-wrap font-sans text-gray-800">
-                  {material.content || material.description || "No content available"}
-                </pre>
-              </div>
-            </div>
-          )}
-
-        </div>
-
-        {/* FOOTER */}
-        <div className="px-6 py-4 border-t flex justify-between bg-gray-50">
-          <span className="text-sm text-gray-700">
-            <strong>Type:</strong> {material.materialType}
-          </span>
-
-          <div className="flex space-x-3">
-            {(material.materialType === "VIDEO" ||
-              material.materialType === "PDF" ||
-              material.materialType === "IMAGE") && (
-                <Button onClick={handleDownload} size="sm" variant="secondary">
-                  Download
-                </Button>
+              {material.description && (
+                <motion.p
+                  className="text-sm text-white/90 ml-14"
+                  variants={fadeIn}
+                  transition={{ delay: 0.1 }}
+                >
+                  {material.description}
+                </motion.p>
               )}
+            </div>
 
-            <Button
+            <motion.button
               onClick={() => {
                 sendTotalTimeAndClose();
                 onClose();
               }}
-              size="sm"
-              variant="primary"
+              className="p-2 hover:bg-white/20 rounded-lg transition-colors relative z-10"
+              whileHover={{ scale: 1.1, rotate: 90 }}
+              whileTap={{ scale: 0.9 }}
+              transition={{ type: "spring", stiffness: 300 }}
             >
-              Close
-            </Button>
-          </div>
-        </div>
-      </div>
-    </div>
+              <X size={28} className="text-white" />
+            </motion.button>
+          </motion.div>
+
+          {/* CONTENT */}
+          <motion.div
+            className="bg-white overflow-y-auto max-h-[calc(95vh-180px)]"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.2 }}
+          >
+
+            {/* VIDEO VIEWER */}
+            {material.materialType === "VIDEO" && (
+              <div className="relative bg-black group">
+                <video
+                  ref={videoRef}
+                  className="w-full max-h-[70vh]"
+                  src={getFileUrl()}
+                  onLoadedMetadata={handleLoadedMetadata}
+                  onTimeUpdate={handleTimeUpdate}
+                  onEnded={handleEnded}
+                  controls={false}
+                />
+
+                {/* Enhanced CONTROLS */}
+                <motion.div
+                  className="absolute bottom-0 w-full bg-gradient-to-t from-black/90 via-black/50 to-transparent p-6"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.3 }}
+                >
+                  {/* Progress Bar with Gradient */}
+                  <div className="mb-4">
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      value={duration ? (currentTime / duration) * 100 : 0}
+                      onChange={handleSeek}
+                      className="w-full h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-gradient-to-r [&::-webkit-slider-thumb]:from-purple-500 [&::-webkit-slider-thumb]:to-pink-500 [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:shadow-lg hover:[&::-webkit-slider-thumb]:scale-110 transition-all"
+                      style={{
+                        background: `linear-gradient(to right, rgb(168, 85, 247) 0%, rgb(236, 72, 153) ${duration ? (currentTime / duration) * 100 : 0}%, rgb(75, 85, 99) ${duration ? (currentTime / duration) * 100 : 0}%, rgb(75, 85, 99) 100%)`
+                      }}
+                    />
+                  </div>
+
+                  {/* Controls Row */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-4">
+                      {/* Play/Pause Button */}
+                      <motion.button
+                        onClick={handlePlayPause}
+                        className="p-3 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full text-white shadow-lg hover:shadow-xl transition-shadow"
+                        whileHover={{ scale: 1.1 }}
+                        whileTap={{ scale: 0.9 }}
+                      >
+                        {isPlaying ? <Pause size={24} /> : <Play size={24} className="ml-0.5" />}
+                      </motion.button>
+
+                      {/* Mute Button */}
+                      <motion.button
+                        onClick={handleMuteToggle}
+                        className="p-2 text-white hover:bg-white/20 rounded-lg transition-colors"
+                        whileHover={{ scale: 1.1 }}
+                        whileTap={{ scale: 0.9 }}
+                      >
+                        {isMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}
+                      </motion.button>
+
+                      {/* Time Display */}
+                      <div className="text-white text-sm font-medium">
+                        <span className="text-purple-300">{formatTime(currentTime)}</span>
+                        <span className="mx-1 text-gray-400">/</span>
+                        <span>{formatTime(duration)}</span>
+                      </div>
+                    </div>
+
+                    {/* Fullscreen Button */}
+                    <motion.button
+                      onClick={handleFullscreen}
+                      className="p-2 text-white hover:bg-white/20 rounded-lg transition-colors"
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.9 }}
+                    >
+                      <Maximize size={20} />
+                    </motion.button>
+                  </div>
+                </motion.div>
+              </div>
+            )}
+
+            {/* Enhanced PDF VIEWER */}
+            {material.materialType === "PDF" && (
+              <>
+                <motion.div
+                  className="p-4 bg-gradient-to-r from-blue-50 to-cyan-50/50 flex justify-between border-b items-center"
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.2 }}
+                >
+                  <div className="flex items-center gap-2">
+                    <AlertCircle size={18} className="text-blue-600" />
+                    <span className="text-blue-800 font-semibold text-sm">Viewer Mode:</span>
+                  </div>
+
+                  {/* Enhanced TIMER DISPLAY */}
+                  {(material.durationMinutes > 0) && (
+                    <motion.div
+                      className="flex items-center gap-2"
+                      initial={{ scale: 0.9 }}
+                      animate={{ scale: 1 }}
+                      transition={{ type: "spring", stiffness: 300 }}
+                    >
+                      {pdfTimeLeft > 0 ? (
+                        <motion.span
+                          className={`font-bold flex items-center gap-2 px-3 py-1.5 rounded-lg border-2 shadow-sm ${pdfTimeLeft < 30
+                            ? 'text-red-600 bg-red-50 border-red-200 animate-pulse'
+                            : 'text-orange-600 bg-orange-50 border-orange-200'
+                            }`}
+                          animate={pdfTimeLeft < 30 ? { scale: [1, 1.05, 1] } : {}}
+                          transition={{ repeat: Infinity, duration: 1 }}
+                        >
+                          <Clock size={18} />
+                          <span className="font-mono">{formatPdfTime(pdfTimeLeft)}</span>
+                        </motion.span>
+                      ) : (
+                        <motion.span
+                          className="text-green-600 font-bold flex items-center gap-2 bg-green-50 px-3 py-1.5 rounded-lg border-2 border-green-200 shadow-sm"
+                          initial={{ scale: 0 }}
+                          animate={{ scale: 1 }}
+                          transition={{ type: "spring", stiffness: 500 }}
+                        >
+                          <CheckCircle size={18} /> Completed!
+                        </motion.span>
+                      )}
+                    </motion.div>
+                  )}
+
+                  {/* Modern Mode Switcher */}
+                  <div className="flex gap-2 bg-white p-1 rounded-lg shadow-sm">
+                    <motion.button
+                      onClick={() => setPdfViewMode("google")}
+                      className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${pdfViewMode === "google"
+                        ? "bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-md"
+                        : "text-gray-600 hover:bg-gray-100"
+                        }`}
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                    >
+                      Google
+                    </motion.button>
+
+                    <motion.button
+                      onClick={() => setPdfViewMode("mozilla")}
+                      className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${pdfViewMode === "mozilla"
+                        ? "bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-md"
+                        : "text-gray-600 hover:bg-gray-100"
+                        }`}
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                    >
+                      Mozilla
+                    </motion.button>
+                  </div>
+                </motion.div>
+
+                <motion.iframe
+                  src={getPdfViewUrl()}
+                  className="w-full h-[70vh] bg-gray-100"
+                  title="PDF Viewer"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.3 }}
+                />
+              </>
+            )}
+
+            {/* Enhanced LINK VIEWER */}
+            {material.materialType === "LINK" && (
+              <div className="p-6 bg-gradient-to-br from-gray-50 to-orange-50/20">
+                <motion.a
+                  href={getFileUrl()}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 bg-gradient-to-r from-orange-500 to-red-500 text-white px-6 py-3 rounded-lg font-semibold shadow-lg hover:shadow-xl transition-shadow"
+                  whileHover={{ scale: 1.05, y: -2 }}
+                  whileTap={{ scale: 0.95 }}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                >
+                  <ExternalLink size={20} />
+                  <span>Open External Link</span>
+                </motion.a>
+
+                <motion.iframe
+                  src={getFileUrl()}
+                  className="w-full h-[70vh] mt-4 border-2 border-gray-200 rounded-lg shadow-lg bg-white"
+                  title="External Link"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.2 }}
+                />
+              </div>
+            )}
+
+            {/* Enhanced IMAGE VIEWER */}
+            {material.materialType === "IMAGE" && (
+              <motion.div
+                className="p-8 bg-gradient-to-br from-gray-50 to-green-50/20 flex items-center justify-center"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.2 }}
+              >
+                <motion.div
+                  className="max-w-full max-h-[70vh] overflow-auto rounded-xl shadow-2xl bg-white p-4"
+                  initial={{ scale: 0.9, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ type: "spring", stiffness: 200 }}
+                  whileHover={{ scale: 1.02 }}
+                >
+                  <img
+                    src={getFileUrl()}
+                    alt={material.title}
+                    className="max-w-full h-auto rounded-lg"
+                  />
+                </motion.div>
+              </motion.div>
+            )}
+
+            {/* Enhanced TEXT VIEWER */}
+            {material.materialType === "TEXT" && (
+              <motion.div
+                className="p-8 bg-gradient-to-br from-gray-50 to-indigo-50/20"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.2 }}
+              >
+                <motion.div
+                  className="prose prose-lg max-w-none bg-white p-8 rounded-xl shadow-lg border border-gray-200"
+                  initial={{ y: 20, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  transition={{ type: "spring", stiffness: 200 }}
+                >
+                  <div className="text-gray-800 leading-relaxed">
+                    <pre className="whitespace-pre-wrap font-sans text-base">
+                      {material.content || material.description || "No content available"}
+                    </pre>
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
+
+          </motion.div>
+
+          {/* Enhanced FOOTER */}
+          <motion.div
+            className="px-6 py-5 border-t flex justify-between bg-gradient-to-r from-gray-50 to-purple-50/20"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4 }}
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-semibold text-gray-700">Type:</span>
+              <span className={`px-3 py-1 rounded-full text-xs font-medium ${typeInfo.bg} bg-gradient-to-r ${typeInfo.color} text-white`}>
+                {material.materialType}
+              </span>
+            </div>
+
+            <div className="flex space-x-3">
+              {(material.materialType === "VIDEO" ||
+                material.materialType === "PDF" ||
+                material.materialType === "IMAGE") && (
+                  <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                    <Button
+                      onClick={handleDownload}
+                      size="sm"
+                      variant="secondary"
+                      icon={Download}
+                      className="shadow-sm hover:shadow-md transition-shadow"
+                    >
+                      Download
+                    </Button>
+                  </motion.div>
+                )}
+
+              <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                <Button
+                  onClick={() => {
+                    sendTotalTimeAndClose();
+                    onClose();
+                  }}
+                  size="sm"
+                  variant="primary"
+                  className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 shadow-md hover:shadow-lg transition-all"
+                >
+                  Close
+                </Button>
+              </motion.div>
+            </div>
+          </motion.div>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
   );
 };
 
