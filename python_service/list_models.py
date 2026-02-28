@@ -1,4 +1,4 @@
-
+#list model
 import google.generativeai as genai
 import os
 
