@@ -1,5 +1,4 @@
 package com.example.skillforge.controller;
-//java
 import com.example.skillforge.dto.response.ApiResponse;
 import com.example.skillforge.dto.response.UserResponse;
 import com.example.skillforge.service.UserService;
@@ -12,7 +11,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
+//admin controller
 /**
  * Controller for ADMIN role endpoints
  */
