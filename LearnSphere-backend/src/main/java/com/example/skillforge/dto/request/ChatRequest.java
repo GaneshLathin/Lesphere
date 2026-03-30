@@ -1,5 +1,5 @@
 package com.example.skillforge.dto.request;
-
+//chatrequest
 public class ChatRequest {
     private String message;
 
