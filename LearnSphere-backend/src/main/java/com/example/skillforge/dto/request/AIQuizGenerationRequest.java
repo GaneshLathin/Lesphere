@@ -1,7 +1,7 @@
 package com.example.skillforge.dto.request;
 
 import lombok.Data;
-
+//AIQuizGenerationRequest
 @Data
 public class AIQuizGenerationRequest {
 
