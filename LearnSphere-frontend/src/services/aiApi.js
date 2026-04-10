@@ -7,7 +7,7 @@ export const generateAIQuiz = async (body) => {
   const res = await api.post("/quizzes/generate", body);
   return res.data.data;
 };
-
+//saveQuiz
 
 export const saveAIQuiz = async (params, quizData) => {
   const url =
